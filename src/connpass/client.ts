@@ -3,9 +3,14 @@ import type { ConnpassEvent, EventsResponse } from "./types.js";
 const ENDPOINT = "https://connpass.com/api/v2/events/";
 const ORDER_NEWEST = "3";
 
+// connpass API caps `count` at 100 per request. Reusing this as the dedupe
+// window size in posted-events.ts ensures we never forget an id we could still
+// see in a future fetch.
+export const MAX_EVENTS_PER_PAGE = 100;
+
 export async function fetchFukuokaLatestEvents(
   apiKey: string,
-  count = 100,
+  count: number = MAX_EVENTS_PER_PAGE,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ConnpassEvent[]> {
   const url = new URL(ENDPOINT);
