@@ -1,0 +1,82 @@
+import { fileURLToPath } from "node:url";
+import {
+  type BlueskyClient,
+  createBlueskyClient,
+  createDryRunClient,
+  login,
+} from "./bluesky/client.js";
+import { type Config, loadConfig } from "./config.js";
+import { fetchFukuokaLatestEvents } from "./connpass/client.js";
+import { isPostable } from "./connpass/filter.js";
+import type { ConnpassEvent } from "./connpass/types.js";
+import {
+  appendAndPrune,
+  isFirstRun,
+  loadPosted,
+  pickNew,
+  savePosted,
+} from "./state/posted-events.js";
+
+export type RunDeps = {
+  fetchEvents: () => Promise<ConnpassEvent[]>;
+  client: BlueskyClient;
+};
+
+export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
+  const [state, fetched] = await Promise.all([
+    loadPosted(config.postedEventsPath),
+    deps.fetchEvents(),
+  ]);
+  const events = fetched.filter(isPostable);
+
+  if (isFirstRun(state)) {
+    const ids = events.map((e) => e.id);
+    if (!config.dryRun) {
+      await savePosted(config.postedEventsPath, { ids });
+    }
+    console.log(`First run: recorded ${ids.length} ids without posting`);
+    return;
+  }
+
+  const toPost = pickNew(state, events).toReversed();
+  if (toPost.length === 0) {
+    console.log("No new events");
+    return;
+  }
+
+  const successIds: number[] = [];
+  // Post sequentially to keep TL ordering and stay under the 1 req/sec limit.
+  for (const event of toPost) {
+    try {
+      // oxlint-disable-next-line no-await-in-loop
+      await deps.client.postEvent(event);
+      successIds.push(event.id);
+    } catch (err) {
+      console.error(`Failed to post event ${event.id}:`, err);
+    }
+  }
+
+  if (!config.dryRun && successIds.length > 0) {
+    await savePosted(config.postedEventsPath, appendAndPrune(state, successIds));
+  }
+  console.log(`Posted ${successIds.length}/${toPost.length} events`);
+}
+
+export async function main(): Promise<void> {
+  const config = loadConfig();
+  const client = config.dryRun
+    ? createDryRunClient()
+    : createBlueskyClient(await login(config.blueskyHandle, config.blueskyAppPassword));
+
+  await runOnce(config, {
+    fetchEvents: () => fetchFukuokaLatestEvents(config.connpassApiKey),
+    client,
+  });
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err: unknown) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}
