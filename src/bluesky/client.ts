@@ -1,7 +1,7 @@
 import { Agent, CredentialSession } from "@atproto/api";
-import { type BlobUploader, buildExternalCard } from "./ogp.js";
-import { buildPost } from "./post-builder.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { type BlobUploader, buildExternalCard } from "./ogp.ts";
+import { buildPost } from "./post-builder.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const SERVICE_URL = new URL("https://bsky.social");
 

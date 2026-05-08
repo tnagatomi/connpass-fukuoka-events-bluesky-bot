@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatJpDateTime } from "./datetime.js";
+import { formatJpDateTime } from "./datetime.ts";
 
 describe("formatJpDateTime", () => {
   test("formats JST input", () => {

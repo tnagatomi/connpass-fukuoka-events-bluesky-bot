@@ -2,9 +2,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { runOnce } from "./main.js";
-import type { Config } from "./config.js";
-import type { ConnpassEvent } from "./connpass/types.js";
+import { runOnce } from "./main.ts";
+import type { Config } from "./config.ts";
+import type { ConnpassEvent } from "./connpass/types.ts";
 
 const event = (id: number, overrides: Partial<ConnpassEvent> = {}): ConnpassEvent => ({
   id,

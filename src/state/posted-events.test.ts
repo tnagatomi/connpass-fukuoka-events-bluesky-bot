@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendAndPrune, isFirstRun, loadPosted, pickNew, savePosted } from "./posted-events.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { appendAndPrune, isFirstRun, loadPosted, pickNew, savePosted } from "./posted-events.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const event = (id: number): ConnpassEvent => ({
   id,

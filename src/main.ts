@@ -4,18 +4,18 @@ import {
   createBlueskyClient,
   createDryRunClient,
   login,
-} from "./bluesky/client.js";
-import { type Config, loadConfig } from "./config.js";
-import { fetchFukuokaLatestEvents } from "./connpass/client.js";
-import { isPostable } from "./connpass/filter.js";
-import type { ConnpassEvent } from "./connpass/types.js";
+} from "./bluesky/client.ts";
+import { type Config, loadConfig } from "./config.ts";
+import { fetchFukuokaLatestEvents } from "./connpass/client.ts";
+import { isPostable } from "./connpass/filter.ts";
+import type { ConnpassEvent } from "./connpass/types.ts";
 import {
   appendAndPrune,
   isFirstRun,
   loadPosted,
   pickNew,
   savePosted,
-} from "./state/posted-events.js";
+} from "./state/posted-events.ts";
 
 export type RunDeps = {
   fetchEvents: () => Promise<ConnpassEvent[]>;

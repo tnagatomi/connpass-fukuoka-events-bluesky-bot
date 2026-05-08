@@ -1,7 +1,7 @@
 import { UnicodeString } from "@atproto/api";
 import { describe, expect, test } from "vitest";
-import { buildPost } from "./post-builder.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { buildPost } from "./post-builder.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const ELLIPSIS = "…";
 

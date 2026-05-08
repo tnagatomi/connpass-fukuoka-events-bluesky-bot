@@ -1,7 +1,7 @@
 import type { BlobRef } from "@atproto/api";
 import { describe, expect, test, vi } from "vitest";
-import { type Poster, createBlueskyClient } from "./client.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { type Poster, createBlueskyClient } from "./client.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const fakeBlobRef = { mimeType: "image/jpeg", size: 100 } as unknown as BlobRef;
 

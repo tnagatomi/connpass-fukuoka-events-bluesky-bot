@@ -1,6 +1,6 @@
 import { AppBskyRichtextFacet, UnicodeString } from "@atproto/api";
-import type { ConnpassEvent } from "../connpass/types.js";
-import { formatJpDateTime } from "../format/datetime.js";
+import type { ConnpassEvent } from "../connpass/types.ts";
+import { formatJpDateTime } from "../format/datetime.ts";
 
 const MAX_GRAPHEMES = 300;
 const ELLIPSIS = "…";

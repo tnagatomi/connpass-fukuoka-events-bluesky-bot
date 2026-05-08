@@ -1,5 +1,5 @@
 import type { AppBskyEmbedExternal, BlobRef } from "@atproto/api";
-import type { ConnpassEvent } from "../connpass/types.js";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const MAX_THUMB_BYTES = 1_000_000;
 

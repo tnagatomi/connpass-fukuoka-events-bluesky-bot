@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { MAX_EVENTS_PER_PAGE } from "../connpass/client.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { MAX_EVENTS_PER_PAGE } from "../connpass/client.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 export type PostedState = { ids: number[] };
 

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { fetchFukuokaLatestEvents } from "./client.js";
-import type { ConnpassEvent } from "./types.js";
+import { fetchFukuokaLatestEvents } from "./client.ts";
+import type { ConnpassEvent } from "./types.ts";
 
 const emptyBody = {
   results_returned: 0,
