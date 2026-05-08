@@ -5,7 +5,7 @@
   "description": "Bluesky bot that posts new connpass events held in Fukuoka prefecture",
   "type": "module",
   "scripts": {
-    "start": "tsx src/main.ts",
+    "start": "node src/main.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "oxlint",
@@ -20,7 +20,6 @@
     "@types/node": "25.6.2",
     "oxfmt": "0.48.0",
     "oxlint": "1.63.0",
-    "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "4.1.5"
   },

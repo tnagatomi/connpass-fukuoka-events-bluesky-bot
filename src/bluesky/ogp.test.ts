@@ -1,7 +1,7 @@
 import type { BlobRef } from "@atproto/api";
 import { describe, expect, test, vi } from "vitest";
-import { type BlobUploader, buildExternalCard } from "./ogp.js";
-import type { ConnpassEvent } from "../connpass/types.js";
+import { type BlobUploader, buildExternalCard } from "./ogp.ts";
+import type { ConnpassEvent } from "../connpass/types.ts";
 
 const fakeBlobRef = { mimeType: "image/jpeg", size: 100 } as unknown as BlobRef;
 

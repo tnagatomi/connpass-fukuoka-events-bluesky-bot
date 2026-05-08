@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { loadConfig } from "./config.js";
+import { loadConfig } from "./config.ts";
 
 const fullEnv = {
   BSKY_HANDLE: "bot.bsky.social",

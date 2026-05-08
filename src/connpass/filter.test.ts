@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { isPostable } from "./filter.js";
-import type { ConnpassEvent } from "./types.js";
+import { isPostable } from "./filter.ts";
+import type { ConnpassEvent } from "./types.ts";
 
 const baseEvent: ConnpassEvent = {
   id: 1,

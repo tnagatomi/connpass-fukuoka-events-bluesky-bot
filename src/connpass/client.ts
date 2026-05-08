@@ -1,4 +1,4 @@
-import type { ConnpassEvent, EventsResponse } from "./types.js";
+import type { ConnpassEvent, EventsResponse } from "./types.ts";
 
 const ENDPOINT = "https://connpass.com/api/v2/events/";
 const ORDER_NEWEST = "3";
