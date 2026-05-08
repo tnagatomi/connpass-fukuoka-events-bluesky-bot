@@ -14,30 +14,49 @@ concurrency:
   group: post-events
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
   post:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
       - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
+
       - run: pnpm install --frozen-lockfile
+
       - run: pnpm start
         env:
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
           BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
           CONNPASS_API_KEY: ${{ secrets.CONNPASS_API_KEY }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+
+      - name: Resolve bot user id
+        id: bot-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          slug='${{ steps.app-token.outputs.app-slug }}'
+          id=$(gh api "/users/${slug}[bot]" --jq .id)
+          echo "id=${id}" >> "$GITHUB_OUTPUT"
+          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
+
       - name: Commit posted-events.json if changed
         run: |
           if [ -n "$(git status --porcelain posted-events.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config user.name '${{ steps.bot-user.outputs.slug }}[bot]'
+            git config user.email '${{ steps.bot-user.outputs.id }}+${{ steps.bot-user.outputs.slug }}[bot]@users.noreply.github.com'
             git add posted-events.json
             git commit -m "chore: update posted-events.json"
             git push
