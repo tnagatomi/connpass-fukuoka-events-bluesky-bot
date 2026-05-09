@@ -62,6 +62,10 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
     await savePosted(config.postedEventsPath, appendAndPrune(state, successIds));
   }
   console.log(`Posted ${successIds.length}/${toPost.length} events`);
+
+  if (successIds.length === 0) {
+    throw new Error(`All ${toPost.length} post attempts failed`);
+  }
 }
 
 export async function main(): Promise<void> {
