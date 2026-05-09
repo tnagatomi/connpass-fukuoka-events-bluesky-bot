@@ -154,17 +154,6 @@ describe("runOnce", () => {
     expect(saved).toEqual({ ids: [99, 1, 2] });
   });
 
-  test("passes the loaded state ids as knownIds to fetchEvents", async () => {
-    await writeFile(statePath, JSON.stringify({ ids: [10, 20, 30] }));
-    const fetchEvents = vi.fn().mockResolvedValue([]);
-
-    await runOnce(config, { fetchEvents, client: { postEvent: vi.fn() } });
-
-    expect(fetchEvents).toHaveBeenCalledTimes(1);
-    const known = fetchEvents.mock.calls[0]![0] as ReadonlySet<number>;
-    expect([...known].toSorted((a, b) => a - b)).toEqual([10, 20, 30]);
-  });
-
   test("leaves state untouched when there are no new events", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [1, 2, 3] }));
     const postEvent = vi.fn();

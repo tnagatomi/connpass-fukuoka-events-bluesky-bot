@@ -17,17 +17,19 @@ const MAX_PAGES = 5;
 export const MAX_FETCH_EVENTS = MAX_EVENTS_PER_PAGE * MAX_PAGES;
 
 export type FetchOptions = {
-  // Stop paginating once a fetched page contains any of these ids. The bot
-  // passes its dedupe state so a caught-up run only hits page 1.
-  knownIds?: ReadonlySet<number>;
   fetchImpl?: typeof fetch;
 };
 
+// Pagination walks unconditionally up to MAX_PAGES (or until a short page
+// signals exhaustion). Stopping early when a page contained a known id would
+// break the bot's "post failures retry on the next run" property: once newer
+// events fill page 1, the failed older event sits on page 2 and an early
+// stop would leave it permanently unposted.
 export async function fetchFukuokaLatestEvents(
   apiKey: string,
   options: FetchOptions = {},
 ): Promise<ConnpassEvent[]> {
-  const { knownIds, fetchImpl = fetch } = options;
+  const { fetchImpl = fetch } = options;
   const all: ConnpassEvent[] = [];
 
   for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
@@ -37,7 +39,6 @@ export async function fetchFukuokaLatestEvents(
     all.push(...page);
 
     if (page.length < MAX_EVENTS_PER_PAGE) break;
-    if (knownIds && page.some((e) => knownIds.has(e.id))) break;
   }
 
   return all;

@@ -102,7 +102,7 @@ describe("fetchFukuokaLatestEvents pagination", () => {
     expect(result.map((e) => e.id)).toEqual([3, 2, 1]);
   });
 
-  test("paginates with start=101 when page 1 is full and no known id matches", async () => {
+  test("paginates with start=101 when page 1 is full", async () => {
     const page1 = fullPage(500);
     const page2 = [event(400)];
     const fetchMock = vi
@@ -118,17 +118,22 @@ describe("fetchFukuokaLatestEvents pagination", () => {
     expect(result.length).toBe(MAX_EVENTS_PER_PAGE + 1);
   });
 
-  test("stops paginating when a page contains a known id", async () => {
+  // Regression: an earlier draft early-stopped pagination when a fetched page
+  // contained any caller-known id. That defeats retry — when newer events
+  // fill page 1, an event whose post failed last run (now on page 2) would
+  // never be re-fetched. Walk pages 1..N regardless of caller state.
+  test("fetches page 2 even when page 1 events would already be in caller state", async () => {
     const page1 = fullPage(500);
-    const fetchMock = vi.fn().mockResolvedValue(responseFor(page1, 1));
+    const failedEventOnPage2 = event(400);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(responseFor(page1, 1))
+      .mockResolvedValueOnce(responseFor([failedEventOnPage2], 101));
 
-    const result = await fetchFukuokaLatestEvents("k", {
-      fetchImpl: fetchMock,
-      knownIds: new Set([page1[50]!.id]),
-    });
+    const result = await fetchFukuokaLatestEvents("k", { fetchImpl: fetchMock });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result).toEqual(page1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result).toContainEqual(failedEventOnPage2);
   });
 
   test("caps pagination at MAX_FETCH_EVENTS even when pages keep returning full results", async () => {
