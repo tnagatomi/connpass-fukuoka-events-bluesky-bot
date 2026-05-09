@@ -2,6 +2,7 @@ import type { ConnpassEvent, EventsResponse } from "./types.ts";
 
 const ENDPOINT = "https://connpass.com/api/v2/events/";
 const ORDER_NEWEST = "3";
+const TIMEOUT_MS = 10_000;
 
 // connpass API caps `count` at 100 per request. Reusing this as the dedupe
 // window size in posted-events.ts ensures we never forget an id we could still
@@ -20,6 +21,7 @@ export async function fetchFukuokaLatestEvents(
 
   const res = await fetchImpl(url, {
     headers: { "X-API-Key": apiKey },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
 
   if (!res.ok) {
