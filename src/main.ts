@@ -26,7 +26,7 @@ import {
 const BATCH_DEADLINE_MS = 4 * 60 * 1000;
 
 export type RunDeps = {
-  fetchEvents: () => Promise<ConnpassEvent[]>;
+  fetchEvents: (knownIds: ReadonlySet<number>) => Promise<ConnpassEvent[]>;
   client: BlueskyClient;
   now?: () => number;
   warn?: (info: PartialFailureInfo) => Promise<void>;
@@ -34,10 +34,8 @@ export type RunDeps = {
 
 export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   const now = deps.now ?? Date.now;
-  const [state, fetched] = await Promise.all([
-    loadPosted(config.postedEventsPath),
-    deps.fetchEvents(),
-  ]);
+  const state = await loadPosted(config.postedEventsPath);
+  const fetched = await deps.fetchEvents(new Set(state.ids));
   const events = fetched.filter(isPostable);
 
   if (isFirstRun(state)) {
@@ -105,7 +103,7 @@ export async function main(): Promise<void> {
     : createBlueskyClient(await login(config.blueskyHandle, config.blueskyAppPassword));
 
   await runOnce(config, {
-    fetchEvents: () => fetchFukuokaLatestEvents(config.connpassApiKey),
+    fetchEvents: (knownIds) => fetchFukuokaLatestEvents(config.connpassApiKey, { knownIds }),
     client,
   });
 }
