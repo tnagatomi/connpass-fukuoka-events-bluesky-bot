@@ -97,6 +97,20 @@ describe("runOnce", () => {
     expect(saved.ids).toEqual([99, 1, 3]);
   });
 
+  test("throws when every post attempt fails so the run is marked failed", async () => {
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const postEvent = vi.fn().mockRejectedValue(new Error("boom"));
+    const fetched = [event(2), event(1)];
+
+    await expect(
+      runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } }),
+    ).rejects.toThrow(/All 2 post attempts failed/);
+
+    expect(postEvent).toHaveBeenCalledTimes(2);
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved).toEqual({ ids: [99] });
+  });
+
   test("persists state after each successful post", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const observedBeforePost: { ids: number[] }[] = [];

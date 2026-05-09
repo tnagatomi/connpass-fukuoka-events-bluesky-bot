@@ -68,6 +68,10 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   }
 
   console.log(`Posted ${successCount}/${toPost.length} events`);
+
+  if (successCount === 0) {
+    throw new Error(`All ${toPost.length} post attempts failed`);
+  }
 }
 
 export async function main(): Promise<void> {
