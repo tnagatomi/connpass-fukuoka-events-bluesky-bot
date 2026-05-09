@@ -136,16 +136,42 @@ describe("buildExternalCard", () => {
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
-  test("defaults mime to image/jpeg when content-type header is missing", async () => {
+  test("omits thumb when content-type header is missing", async () => {
     const { agent, uploadBlob } = makeAgent();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(cardybOk())
       .mockResolvedValueOnce(new Response(new Uint8Array([1])));
 
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("omits thumb when content-type is not image/*", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(imageOk(new Uint8Array([1, 2, 3]), "text/html"));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("strips content-type parameters before uploading", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(imageOk(new Uint8Array([1, 2, 3]), "image/png; charset=binary"));
+
     await buildExternalCard(agent, baseEvent, fetchMock);
 
-    expect(uploadBlob.mock.calls[0]![1]).toEqual({ encoding: "image/jpeg" });
+    expect(uploadBlob.mock.calls[0]![1]).toEqual({ encoding: "image/png" });
   });
 
   test("omits thumb when image is larger than 1 MB", async () => {

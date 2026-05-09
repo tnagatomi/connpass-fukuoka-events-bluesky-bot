@@ -40,10 +40,15 @@ export async function buildExternalCard(
       await res.body?.cancel();
       return card;
     }
+    const mime = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    if (!mime.startsWith("image/")) {
+      await res.body?.cancel();
+      return card;
+    }
+
     const buf = new Uint8Array(await res.arrayBuffer());
     if (buf.byteLength > MAX_THUMB_BYTES) return card;
 
-    const mime = res.headers.get("content-type") ?? "image/jpeg";
     const upload = await agent.uploadBlob(buf, { encoding: mime });
     return { ...card, thumb: upload.data.blob };
   } catch {
