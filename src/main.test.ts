@@ -111,6 +111,23 @@ describe("runOnce", () => {
     expect(saved).toEqual({ ids: [99] });
   });
 
+  test("persists state after each successful post", async () => {
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const observedBeforePost: { ids: number[] }[] = [];
+    const postEvent = vi.fn().mockImplementation(async () => {
+      observedBeforePost.push(JSON.parse(await readFile(statePath, "utf-8")));
+    });
+
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve([event(2), event(1)]),
+      client: { postEvent },
+    });
+
+    expect(observedBeforePost).toEqual([{ ids: [99] }, { ids: [99, 1] }]);
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved).toEqual({ ids: [99, 1, 2] });
+  });
+
   test("leaves state untouched when there are no new events", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [1, 2, 3] }));
     const postEvent = vi.fn();

@@ -87,6 +87,33 @@ describe("buildPost", () => {
     expect(buildPost(baseEvent).text).not.toContain(ELLIPSIS);
   });
 
+  test("uses grapheme-aware slicing for multi-code-unit titles", () => {
+    // Each 🎉 is 1 grapheme but 2 UTF-16 code units; UTF-16 slicing would keep only ~half.
+    const result = buildPost({ ...baseEvent, title: "🎉".repeat(500), place: "場所" });
+    const len = new UnicodeString(result.text).graphemeLength;
+    expect(len).toBeLessThanOrEqual(300);
+    expect(len).toBeGreaterThanOrEqual(270);
+    expect(result.text.startsWith("🎉🎉🎉")).toBe(true);
+  });
+
+  test("does not split ZWJ grapheme clusters when truncating titles", () => {
+    // Family-of-4 emoji is a single grapheme made of 7 code points (11 UTF-16 units).
+    const family = "👨‍👩‍👧‍👦";
+    const result = buildPost({ ...baseEvent, title: family.repeat(400), place: "場所" });
+    const len = new UnicodeString(result.text).graphemeLength;
+    expect(len).toBeLessThanOrEqual(300);
+    expect(len).toBeGreaterThanOrEqual(270);
+    expect(result.text.startsWith(family + family)).toBe(true);
+  });
+
+  test("truncates long place to stay within 300 graphemes", () => {
+    const result = buildPost({ ...baseEvent, place: "あ".repeat(500) });
+    const len = new UnicodeString(result.text).graphemeLength;
+    expect(len).toBeLessThanOrEqual(300);
+    expect(result.text).toContain(`📍 あ`);
+    expect(result.text).toContain(ELLIPSIS);
+  });
+
   test("recomputes facet offsets after truncation", () => {
     const result = buildPost({
       ...baseEvent,
