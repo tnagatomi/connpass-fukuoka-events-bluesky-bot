@@ -25,7 +25,7 @@ describe("buildPost", () => {
   test("formats title, date, place, blank line, URL", () => {
     const result = buildPost({ ...baseEvent, place: "福岡市中央区天神" });
     expect(result.text).toBe(
-      "Fukuoka.go #5\n\n📅 5月15日(金) 19:00〜\n📍 福岡市中央区天神\n\nhttps://connpass.com/event/12345/",
+      "Fukuoka.go #5\n\n📅 2026年5月15日(金) 19:00〜\n📍 福岡市中央区天神\n\nhttps://connpass.com/event/12345/",
     );
   });
 
