@@ -48,9 +48,10 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
 
   let currentState = state;
   let successCount = 0;
-  // Post sequentially to keep TL ordering and stay under the 1 req/sec limit.
-  // Persist after each success so a mid-loop crash cannot silently re-post
-  // already-delivered events on the next run.
+  // Post sequentially so the timeline keeps oldest-first ordering even when
+  // an individual post fails and the loop moves on. Persist after each
+  // success so a mid-loop crash cannot silently re-post already-delivered
+  // events on the next run.
   for (const event of toPost) {
     try {
       // oxlint-disable-next-line no-await-in-loop
