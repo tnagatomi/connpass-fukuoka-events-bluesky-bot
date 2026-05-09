@@ -125,7 +125,8 @@ src/
 ├── bluesky/
 │   ├── client.ts          # @atproto/api を使った login と postEvent
 │   ├── post-builder.ts    # 投稿テキスト + facets の生成
-│   └── ogp.ts             # connpass の画像を OGP カードとして添付
+│   ├── cardyb.ts          # Bluesky 公式 OGP 抽出 API (cardyb) のクライアント
+│   └── ogp.ts             # cardyb 経由で取得した OG メタデータと画像を OGP カードに変換
 └── format/
     └── datetime.ts        # ISO-8601 → 「M月D日(曜) HH:mm〜」(JST)
 
