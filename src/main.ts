@@ -46,22 +46,28 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
     return;
   }
 
-  const successIds: number[] = [];
+  let currentState = state;
+  let successCount = 0;
   // Post sequentially to keep TL ordering and stay under the 1 req/sec limit.
+  // Persist after each success so a mid-loop crash cannot silently re-post
+  // already-delivered events on the next run.
   for (const event of toPost) {
     try {
       // oxlint-disable-next-line no-await-in-loop
       await deps.client.postEvent(event);
-      successIds.push(event.id);
     } catch (err) {
       console.error(`Failed to post event ${event.id}:`, err);
+      continue;
+    }
+    successCount++;
+    if (!config.dryRun) {
+      currentState = appendAndPrune(currentState, [event.id]);
+      // oxlint-disable-next-line no-await-in-loop
+      await savePosted(config.postedEventsPath, currentState);
     }
   }
 
-  if (!config.dryRun && successIds.length > 0) {
-    await savePosted(config.postedEventsPath, appendAndPrune(state, successIds));
-  }
-  console.log(`Posted ${successIds.length}/${toPost.length} events`);
+  console.log(`Posted ${successCount}/${toPost.length} events`);
 }
 
 export async function main(): Promise<void> {
