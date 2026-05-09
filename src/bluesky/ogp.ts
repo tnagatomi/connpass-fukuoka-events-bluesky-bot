@@ -30,6 +30,9 @@ export async function buildExternalCard(
   if (!extract.image) return card;
 
   try {
+    const imageUrl = new URL(extract.image);
+    if (imageUrl.protocol !== "https:") return card;
+
     const res = await fetchImpl(extract.image, {
       signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
     });
@@ -37,13 +40,38 @@ export async function buildExternalCard(
       await res.body?.cancel();
       return card;
     }
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength > MAX_THUMB_BYTES) return card;
+    const mime = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    if (!mime.startsWith("image/")) {
+      await res.body?.cancel();
+      return card;
+    }
 
-    const mime = res.headers.get("content-type") ?? "image/jpeg";
+    const buf = await readWithCap(res, MAX_THUMB_BYTES);
+    if (!buf) return card;
+
     const upload = await agent.uploadBlob(buf, { encoding: mime });
     return { ...card, thumb: upload.data.blob };
   } catch {
     return card;
   }
+}
+
+async function readWithCap(res: Response, cap: number): Promise<Uint8Array | null> {
+  if (!res.body) return null;
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of res.body) {
+    total += chunk.byteLength;
+    if (total > cap) return null;
+    chunks.push(chunk);
+  }
+
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buf.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return buf;
 }

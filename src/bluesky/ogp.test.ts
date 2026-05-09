@@ -111,6 +111,19 @@ describe("buildExternalCard", () => {
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
+  test("omits thumb when image URL is not https", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk({ image: "http://example.com/cover.png" }));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
   test("returns card without thumb when cardyb image is empty", async () => {
     const { agent, uploadBlob } = makeAgent();
     const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk({ image: "" }));
@@ -123,16 +136,42 @@ describe("buildExternalCard", () => {
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
-  test("defaults mime to image/jpeg when content-type header is missing", async () => {
+  test("omits thumb when content-type header is missing", async () => {
     const { agent, uploadBlob } = makeAgent();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(cardybOk())
       .mockResolvedValueOnce(new Response(new Uint8Array([1])));
 
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("omits thumb when content-type is not image/*", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(imageOk(new Uint8Array([1, 2, 3]), "text/html"));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("strips content-type parameters before uploading", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(imageOk(new Uint8Array([1, 2, 3]), "image/png; charset=binary"));
+
     await buildExternalCard(agent, baseEvent, fetchMock);
 
-    expect(uploadBlob.mock.calls[0]![1]).toEqual({ encoding: "image/jpeg" });
+    expect(uploadBlob.mock.calls[0]![1]).toEqual({ encoding: "image/png" });
   });
 
   test("omits thumb when image is larger than 1 MB", async () => {
@@ -144,6 +183,34 @@ describe("buildExternalCard", () => {
 
     expect(card.thumb).toBeUndefined();
     expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("stops reading the image body once the cap is exceeded", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const chunkSize = 300_000;
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 10) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(chunkSize));
+      },
+    });
+    const imageRes = new Response(body, {
+      headers: { "content-type": "image/png" },
+    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageRes);
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+    // Cap is 1_000_000; with 300_000-byte chunks we should bail after 4 chunks
+    // at most, well before exhausting all 10.
+    expect(pulls).toBeLessThan(10);
   });
 
   test("cancels response body and omits thumb when image fetch returns non-ok", async () => {
