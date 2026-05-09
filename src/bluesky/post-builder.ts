@@ -4,11 +4,22 @@ import { formatJpDateTime } from "../format/datetime.ts";
 
 const MAX_GRAPHEMES = 300;
 const ELLIPSIS = "…";
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 export type BuiltPost = {
   text: string;
   facets: AppBskyRichtextFacet.Main[];
 };
+
+function sliceGraphemes(str: string, max: number): string {
+  if (max <= 0) return "";
+  const out: string[] = [];
+  for (const { segment } of segmenter.segment(str)) {
+    if (out.length === max) return out.join("");
+    out.push(segment);
+  }
+  return str;
+}
 
 export function buildPost(event: ConnpassEvent): BuiltPost {
   const link = event.url;
@@ -28,7 +39,7 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
     const titleGraphemes = new UnicodeString(event.title).graphemeLength;
     const overhead = unicode.graphemeLength - titleGraphemes;
     const maxTitleGraphemes = MAX_GRAPHEMES - overhead - 1;
-    lines[0] = event.title.slice(0, Math.max(0, maxTitleGraphemes)) + ELLIPSIS;
+    lines[0] = sliceGraphemes(event.title, maxTitleGraphemes) + ELLIPSIS;
     text = lines.join("\n");
     unicode = new UnicodeString(text);
   }
