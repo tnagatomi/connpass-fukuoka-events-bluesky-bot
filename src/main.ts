@@ -30,7 +30,9 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   const events = fetched.filter(isPostable);
 
   if (isFirstRun(state)) {
-    const ids = events.map((e) => e.id);
+    // connpass returns events newest-first; appendAndPrune retains its tail,
+    // so store oldest-first to preserve the most recent ids across later prunes.
+    const ids = events.map((e) => e.id).toReversed();
     if (!config.dryRun) {
       await savePosted(config.postedEventsPath, { ids });
     }
