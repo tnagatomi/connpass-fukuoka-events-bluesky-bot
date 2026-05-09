@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runOnce } from "./main.ts";
 import type { Config } from "./config.ts";
-import { MAX_EVENTS_PER_PAGE } from "./connpass/client.ts";
+import { MAX_FETCH_EVENTS } from "./connpass/client.ts";
 import type { ConnpassEvent } from "./connpass/types.ts";
 
 const event = (id: number, overrides: Partial<ConnpassEvent> = {}): ConnpassEvent => ({
@@ -183,23 +183,24 @@ describe("runOnce", () => {
 
   test("first-run state preserves newest ids when a later run prunes", async () => {
     // Fill the dedupe window exactly, as connpass returns them: newest first.
-    const firstRunEvents = Array.from({ length: MAX_EVENTS_PER_PAGE }, (_, i) =>
-      event(MAX_EVENTS_PER_PAGE - i),
+    const firstRunEvents = Array.from({ length: MAX_FETCH_EVENTS }, (_, i) =>
+      event(MAX_FETCH_EVENTS - i),
     );
     await runOnce(config, {
       fetchEvents: () => Promise.resolve(firstRunEvents),
       client: { postEvent: vi.fn() },
     });
 
-    const secondRun = [event(200), ...firstRunEvents.slice(0, MAX_EVENTS_PER_PAGE - 1)];
+    const newId = MAX_FETCH_EVENTS + 100;
+    const secondRun = [event(newId), ...firstRunEvents.slice(0, MAX_FETCH_EVENTS - 1)];
     await runOnce(config, {
       fetchEvents: () => Promise.resolve(secondRun),
       client: { postEvent: vi.fn().mockResolvedValue(undefined) },
     });
 
-    // After prune, only the oldest id (1) drops; ids 2..100 plus the newly posted 200 remain.
+    // After prune, only the oldest id (1) drops; ids 2..MAX plus the newly posted id remain.
     const saved = JSON.parse(await readFile(statePath, "utf-8")) as { ids: number[] };
-    const expected = [...Array.from({ length: MAX_EVENTS_PER_PAGE - 1 }, (_, i) => i + 2), 200];
+    const expected = [...Array.from({ length: MAX_FETCH_EVENTS - 1 }, (_, i) => i + 2), newId];
     expect(saved.ids).toEqual(expected);
   });
 

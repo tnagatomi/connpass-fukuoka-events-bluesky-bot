@@ -4,10 +4,15 @@ const ENDPOINT = "https://connpass.com/api/v2/events/";
 const ORDER_NEWEST = "3";
 const TIMEOUT_MS = 10_000;
 
-// connpass API caps `count` at 100 per request. Reusing this as the dedupe
-// window size in posted-events.ts ensures we never forget an id we could still
-// see in a future fetch.
+// connpass API caps `count` at 100 per request.
 export const MAX_EVENTS_PER_PAGE = 100;
+
+// Upper bound on events fetched per run via pagination (5 pages worth). Each
+// page fetch has a 10s timeout, so the worst-case fetch budget is ~50s — well
+// inside the 4-minute BATCH_DEADLINE in main.ts. Reused as the dedupe window
+// cap in posted-events.ts so we never forget an id that could still reappear
+// within the deepest page we'll fetch next time.
+export const MAX_FETCH_EVENTS = MAX_EVENTS_PER_PAGE * 5;
 
 export async function fetchFukuokaLatestEvents(
   apiKey: string,
