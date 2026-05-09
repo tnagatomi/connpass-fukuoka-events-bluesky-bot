@@ -52,6 +52,18 @@ describe("posted-events file I/O", () => {
     await savePosted(path, { ids: [10, 20, 30] });
     expect(await loadPosted(path)).toEqual({ ids: [10, 20, 30] });
   });
+
+  test.for([
+    ["top-level array", "[1, 2, 3]"],
+    ["top-level null", "null"],
+    ["missing ids", '{"foo": 1}'],
+    ["ids not array", '{"ids": 1}'],
+    ["ids contains float", '{"ids": [1, 1.5]}'],
+  ])("loadPosted throws on invalid shape: %s", async ([, payload]) => {
+    const path = join(dir, "p.json");
+    await writeFile(path, payload);
+    await expect(loadPosted(path)).rejects.toThrow(/Invalid posted-events state/);
+  });
 });
 
 describe("isFirstRun", () => {
