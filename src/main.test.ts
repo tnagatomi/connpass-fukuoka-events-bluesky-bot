@@ -177,6 +177,31 @@ describe("runOnce", () => {
     expect(saved.ids).toEqual(expected);
   });
 
+  test("stops accepting new posts after the 4-minute batch deadline", async () => {
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    let t = 0;
+    // Each post advances the clock by 1.5 minutes; deadline is 4 minutes.
+    // Iter 0 at t=0, post -> t=90s; iter 1 at t=90s, post -> t=180s;
+    // iter 2 at t=180s, post -> t=270s; iter 3 at t=270s>240s -> break.
+    const postEvent = vi.fn().mockImplementation(async () => {
+      t += 90_000;
+    });
+
+    await runOnce(
+      { ...config },
+      {
+        fetchEvents: () => Promise.resolve([event(5), event(4), event(3), event(2), event(1)]),
+        client: { postEvent },
+        now: () => t,
+      },
+    );
+
+    expect(postEvent).toHaveBeenCalledTimes(3);
+    expect(postEvent.mock.calls.map((c) => (c[0] as ConnpassEvent).id)).toEqual([1, 2, 3]);
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved.ids).toEqual([99, 1, 2, 3]);
+  });
+
   test("dry-run skips state save even after successful posts", async () => {
     const dryConfig: Config = { ...config, dryRun: true };
     await writeFile(statePath, JSON.stringify({ ids: [99] }));

@@ -17,12 +17,21 @@ import {
   savePosted,
 } from "./state/posted-events.ts";
 
+// Stop *starting* new posts after this many ms so the job can finish its
+// state-persisting steps within the 10-minute backstop in post.yml. The
+// deadline only gates new iterations; a post that has already started can
+// still run ~25s on top (cardyb 10s + image fetch 10s + atproto). 4 minutes
+// leaves ~6 minutes of headroom for that tail plus commit/push.
+const BATCH_DEADLINE_MS = 4 * 60 * 1000;
+
 export type RunDeps = {
   fetchEvents: () => Promise<ConnpassEvent[]>;
   client: BlueskyClient;
+  now?: () => number;
 };
 
 export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
+  const now = deps.now ?? Date.now;
   const [state, fetched] = await Promise.all([
     loadPosted(config.postedEventsPath),
     deps.fetchEvents(),
@@ -48,11 +57,18 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
 
   let currentState = state;
   let successCount = 0;
+  let deferred = 0;
+  const startedAt = now();
   // Post sequentially so the timeline keeps oldest-first ordering even when
   // an individual post fails and the loop moves on. Persist after each
   // success so a mid-loop crash cannot silently re-post already-delivered
   // events on the next run.
-  for (const event of toPost) {
+  for (const [i, event] of toPost.entries()) {
+    if (now() - startedAt > BATCH_DEADLINE_MS) {
+      deferred = toPost.length - i;
+      console.log(`Hit batch deadline; deferring ${deferred} events to next run`);
+      break;
+    }
     try {
       // oxlint-disable-next-line no-await-in-loop
       await deps.client.postEvent(event);
@@ -68,10 +84,11 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
     }
   }
 
-  console.log(`Posted ${successCount}/${toPost.length} events`);
+  const attempted = toPost.length - deferred;
+  console.log(`Posted ${successCount}/${attempted} events`);
 
-  if (successCount === 0) {
-    throw new Error(`All ${toPost.length} post attempts failed`);
+  if (attempted > 0 && successCount === 0) {
+    throw new Error(`All ${attempted} post attempts failed`);
   }
 }
 
