@@ -14,19 +14,16 @@ concurrency:
   group: post-events
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
-        id: app-token
-        with:
-          client-id: ${{ secrets.BOT_CLIENT_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
@@ -42,7 +39,22 @@ jobs:
           CONNPASS_API_KEY: ${{ secrets.CONNPASS_API_KEY }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
+      - name: Check for posted-events.json changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain posted-events.json)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        if: steps.changes.outputs.changed == 'true'
+        id: app-token
+        with:
+          client-id: ${{ secrets.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
       - name: Resolve bot user id
+        if: steps.changes.outputs.changed == 'true'
         id: bot-user
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -52,12 +64,14 @@ jobs:
           echo "id=${id}" >> "$GITHUB_OUTPUT"
           echo "slug=${slug}" >> "$GITHUB_OUTPUT"
 
-      - name: Commit posted-events.json if changed
+      - name: Commit and push posted-events.json
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          if [ -n "$(git status --porcelain posted-events.json)" ]; then
-            git config user.name '${{ steps.bot-user.outputs.slug }}[bot]'
-            git config user.email '${{ steps.bot-user.outputs.id }}+${{ steps.bot-user.outputs.slug }}[bot]@users.noreply.github.com'
-            git add posted-events.json
-            git commit -m "chore: update posted-events.json"
-            git push
-          fi
+          git config user.name '${{ steps.bot-user.outputs.slug }}[bot]'
+          git config user.email '${{ steps.bot-user.outputs.id }}+${{ steps.bot-user.outputs.slug }}[bot]@users.noreply.github.com'
+          git add posted-events.json
+          git commit -m "chore: update posted-events.json"
+          auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w 0)"
+          git -c "http.https://github.com/.extraheader=${auth_header}" push
