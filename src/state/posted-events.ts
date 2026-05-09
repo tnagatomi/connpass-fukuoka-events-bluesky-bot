@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { MAX_EVENTS_PER_PAGE } from "../connpass/client.ts";
 import type { ConnpassEvent } from "../connpass/types.ts";
 
@@ -28,7 +28,11 @@ function isPostedState(value: unknown): value is PostedState {
 }
 
 export async function savePosted(path: string, state: PostedState): Promise<void> {
-  await writeFile(path, `${JSON.stringify(state, null, 2)}\n`);
+  // Write to a sibling tmp file then rename so an interrupted run cannot
+  // leave a half-written posted-events.json that breaks the next load.
+  const tmp = `${path}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`);
+  await rename(tmp, path);
 }
 
 export function isFirstRun(state: PostedState): boolean {
