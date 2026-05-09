@@ -89,4 +89,46 @@ describe("fetchFukuokaLatestEvents", () => {
 
     await expect(fetchFukuokaLatestEvents("k", undefined, fetchMock)).rejects.toThrow("500");
   });
+
+  test("throws when the response envelope is malformed", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({})));
+
+    await expect(fetchFukuokaLatestEvents("k", undefined, fetchMock)).rejects.toThrow(
+      "events is not an array",
+    );
+  });
+
+  test("skips events that fail validation and keeps the valid ones", async () => {
+    const valid: ConnpassEvent = {
+      id: 200,
+      title: "Valid event",
+      catch: null,
+      description: null,
+      url: "https://connpass.com/event/200/",
+      image_url: null,
+      started_at: null,
+      ended_at: null,
+      address: null,
+      place: null,
+      group: null,
+      event_type: "participation",
+      open_status: "open",
+    };
+    const body = {
+      results_returned: 2,
+      results_available: 2,
+      results_start: 0,
+      events: [{ id: "bad" }, valid],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body)));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const events = await fetchFukuokaLatestEvents("k", undefined, fetchMock);
+      expect(events.map((e) => e.id)).toEqual([200]);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });

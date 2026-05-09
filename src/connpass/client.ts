@@ -1,4 +1,5 @@
-import type { ConnpassEvent, EventsResponse } from "./types.ts";
+import { parseEvents } from "./parse.ts";
+import type { ConnpassEvent } from "./types.ts";
 
 const ENDPOINT = "https://connpass.com/api/v2/events/";
 const ORDER_NEWEST = "3";
@@ -28,6 +29,5 @@ export async function fetchFukuokaLatestEvents(
     throw new Error(`connpass API request failed: ${res.status} ${res.statusText}`);
   }
 
-  const data = (await res.json()) as EventsResponse;
-  return data.events;
+  return parseEvents(await res.json());
 }
