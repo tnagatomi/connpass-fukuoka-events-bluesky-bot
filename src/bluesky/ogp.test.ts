@@ -111,6 +111,19 @@ describe("buildExternalCard", () => {
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
+  test("omits thumb when image URL is not https", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk({ image: "http://example.com/cover.png" }));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
   test("returns card without thumb when cardyb image is empty", async () => {
     const { agent, uploadBlob } = makeAgent();
     const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk({ image: "" }));

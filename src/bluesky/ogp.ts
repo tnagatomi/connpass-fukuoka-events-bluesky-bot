@@ -30,6 +30,9 @@ export async function buildExternalCard(
   if (!extract.image) return card;
 
   try {
+    const imageUrl = new URL(extract.image);
+    if (imageUrl.protocol !== "https:") return card;
+
     const res = await fetchImpl(extract.image, {
       signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
     });
