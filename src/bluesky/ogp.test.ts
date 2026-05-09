@@ -21,6 +21,32 @@ const baseEvent: ConnpassEvent = {
   open_status: "open",
 };
 
+const cardybImageUrl = "https://cardyb.bsky.app/v1/image?url=https%3A%2F%2Fexample.com%2Fcover.png";
+
+function cardybOk(
+  overrides: { title?: string; description?: string; image?: string } = {},
+): Response {
+  return new Response(
+    JSON.stringify({
+      error: "",
+      title: "Fukuoka.go #5 (2026/05/15 19:00〜)",
+      description: "An OG description from connpass page",
+      image: cardybImageUrl,
+      ...overrides,
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+}
+
+function imageOk(
+  bytes: Uint8Array = new Uint8Array([1, 2, 3]),
+  contentType: string = "image/jpeg",
+): Response {
+  return new Response(bytes, {
+    headers: { "content-type": contentType },
+  });
+}
+
 function makeAgent(blob: BlobRef = fakeBlobRef): {
   agent: BlobUploader;
   uploadBlob: ReturnType<typeof vi.fn>;
@@ -30,92 +56,79 @@ function makeAgent(blob: BlobRef = fakeBlobRef): {
 }
 
 describe("buildExternalCard", () => {
-  test("uses event.url as uri and event.title as title", async () => {
+  test("uses event.url as uri and event.title as title even when cardyb returns its own title", async () => {
     const { agent } = makeAgent();
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(new Uint8Array([1, 2, 3]), {
-        headers: { "content-type": "image/jpeg" },
-      }),
-    );
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageOk());
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
-    expect(card.uri).toBe("https://connpass.com/event/12345/");
-    expect(card.title).toBe("Fukuoka.go #5");
+    expect(card.uri).toBe(baseEvent.url);
+    expect(card.title).toBe(baseEvent.title);
   });
 
-  test("uses event.catch as description when set", async () => {
+  test("uses cardyb description when extract succeeds", async () => {
     const { agent } = makeAgent();
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } }),
-      );
+      .mockResolvedValueOnce(cardybOk({ description: "イベント概要" }))
+      .mockResolvedValueOnce(imageOk());
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
-    expect(card.description).toBe("An evening of Go in Fukuoka");
+    expect(card.description).toBe("イベント概要");
   });
 
-  test("falls back to event.place when catch is null", async () => {
-    const { agent } = makeAgent();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } }),
-      );
-
-    const card = await buildExternalCard(
-      agent,
-      { ...baseEvent, catch: null, place: "天神" },
-      fetchMock,
-    );
-
-    expect(card.description).toBe("天神");
-  });
-
-  test("uses empty description when catch and place are both null", async () => {
-    const { agent } = makeAgent();
-    const card = await buildExternalCard(
-      agent,
-      { ...baseEvent, image_url: null, catch: null, place: null },
-      vi.fn(),
-    );
-
-    expect(card.description).toBe("");
-  });
-
-  test("returns card without thumb when image_url is null", async () => {
-    const { agent, uploadBlob } = makeAgent();
-    const fetchMock = vi.fn();
-
-    const card = await buildExternalCard(agent, { ...baseEvent, image_url: null }, fetchMock);
-
-    expect(card.thumb).toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(uploadBlob).not.toHaveBeenCalled();
-  });
-
-  test("uploads image and attaches thumb when fetch succeeds", async () => {
+  test("uploads cardyb image and attaches thumb when both fetches succeed", async () => {
     const { agent, uploadBlob } = makeAgent();
     const bytes = new Uint8Array([1, 2, 3, 4]);
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(new Response(bytes, { headers: { "content-type": "image/png" } }));
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(imageOk(bytes, "image/png"));
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
-    expect(fetchMock).toHaveBeenCalledWith(baseEvent.image_url);
-    expect(uploadBlob).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[1]![0]).toBe(cardybImageUrl);
     const [data, opts] = uploadBlob.mock.calls[0]!;
     expect(data).toEqual(bytes);
     expect(opts).toEqual({ encoding: "image/png" });
     expect(card.thumb).toBe(fakeBlobRef);
   });
 
+  test("returns minimal card with empty description when cardyb extract fails", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 502, statusText: "Bad Gateway" }));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card).toEqual({
+      uri: baseEvent.url,
+      title: baseEvent.title,
+      description: "",
+    });
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
+  test("returns card without thumb when cardyb image is empty", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk({ image: "" }));
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(card.description).toBe("An OG description from connpass page");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(uploadBlob).not.toHaveBeenCalled();
+  });
+
   test("defaults mime to image/jpeg when content-type header is missing", async () => {
     const { agent, uploadBlob } = makeAgent();
-    const fetchMock = vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { headers: {} }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockResolvedValueOnce(new Response(new Uint8Array([1])));
 
     await buildExternalCard(agent, baseEvent, fetchMock);
 
@@ -125,9 +138,7 @@ describe("buildExternalCard", () => {
   test("omits thumb when image is larger than 1 MB", async () => {
     const { agent, uploadBlob } = makeAgent();
     const big = new Uint8Array(1_000_001);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(big, { headers: { "content-type": "image/jpeg" } }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageOk(big));
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
@@ -138,9 +149,9 @@ describe("buildExternalCard", () => {
   test("cancels response body and omits thumb when image fetch returns non-ok", async () => {
     const { agent, uploadBlob } = makeAgent();
     const cancel = vi.fn().mockResolvedValue(undefined);
-    const res = new Response(null, { status: 404, statusText: "Not Found" });
-    Object.defineProperty(res, "body", { value: { cancel } });
-    const fetchMock = vi.fn().mockResolvedValue(res);
+    const imageRes = new Response(null, { status: 404, statusText: "Not Found" });
+    Object.defineProperty(imageRes, "body", { value: { cancel } });
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageRes);
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
@@ -151,25 +162,37 @@ describe("buildExternalCard", () => {
 
   test("omits thumb when image fetch throws", async () => {
     const { agent, uploadBlob } = makeAgent();
-    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cardybOk())
+      .mockRejectedValueOnce(new Error("network down"));
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
     expect(card.thumb).toBeUndefined();
+    expect(card.description).toBe("An OG description from connpass page");
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
   test("omits thumb when uploadBlob throws", async () => {
     const uploadBlob = vi.fn().mockRejectedValue(new Error("upload failed"));
     const agent: BlobUploader = { uploadBlob };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageOk());
 
     const card = await buildExternalCard(agent, baseEvent, fetchMock);
 
     expect(card.thumb).toBeUndefined();
+  });
+
+  test("calls cardyb with the connpass event url", async () => {
+    const { agent } = makeAgent();
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageOk());
+
+    await buildExternalCard(agent, baseEvent, fetchMock);
+
+    const cardybCall = fetchMock.mock.calls[0]![0] as URL;
+    expect(cardybCall.toString()).toBe(
+      `https://cardyb.bsky.app/v1/extract?url=${encodeURIComponent(baseEvent.url)}`,
+    );
   });
 });

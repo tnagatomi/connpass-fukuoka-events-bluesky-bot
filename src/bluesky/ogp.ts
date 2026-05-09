@@ -1,7 +1,9 @@
 import type { AppBskyEmbedExternal, BlobRef } from "@atproto/api";
 import type { ConnpassEvent } from "../connpass/types.ts";
+import { extractCardyb } from "./cardyb.ts";
 
 const MAX_THUMB_BYTES = 1_000_000;
+const IMAGE_TIMEOUT_MS = 10_000;
 
 export type ExternalCard = AppBskyEmbedExternal.External;
 
@@ -14,16 +16,23 @@ export async function buildExternalCard(
   event: ConnpassEvent,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ExternalCard> {
+  const extract = await extractCardyb(event.url, fetchImpl);
+  if (!extract) {
+    return { uri: event.url, title: event.title, description: "" };
+  }
+
   const card: ExternalCard = {
     uri: event.url,
     title: event.title,
-    description: event.catch ?? event.place ?? "",
+    description: extract.description,
   };
 
-  if (!event.image_url) return card;
+  if (!extract.image) return card;
 
   try {
-    const res = await fetchImpl(event.image_url);
+    const res = await fetchImpl(extract.image, {
+      signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+    });
     if (!res.ok) {
       await res.body?.cancel();
       return card;
