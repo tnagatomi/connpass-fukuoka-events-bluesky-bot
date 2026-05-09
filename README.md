@@ -128,7 +128,7 @@ src/
 │   ├── cardyb.ts          # Bluesky 公式 OGP 抽出 API (cardyb) のクライアント
 │   └── ogp.ts             # cardyb 経由で取得した OG メタデータと画像を OGP カードに変換
 └── format/
-    └── datetime.ts        # ISO-8601 → 「M月D日(曜) HH:mm〜」(JST)
+    └── datetime.ts        # ISO-8601 → 「YYYY年M月D日(曜) HH:mm〜」(JST)
 
 .github/workflows/
 ├── ci.yml                 # PR/push のテスト・lint・format・typecheck
@@ -142,7 +142,7 @@ posted-events.json         # 直近 100 件の投稿済みイベント ID
 ```
 [イベントタイトル]
 
-📅 5月15日(金) 19:00〜
+📅 2026年5月15日(金) 19:00〜
 📍 福岡市中央区天神
 
 https://connpass.com/event/12345/
