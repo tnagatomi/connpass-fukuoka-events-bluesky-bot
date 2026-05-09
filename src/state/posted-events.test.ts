@@ -65,7 +65,7 @@ describe("posted-events file I/O", () => {
     ["missing ids", '{"foo": 1}'],
     ["ids not array", '{"ids": 1}'],
     ["ids contains float", '{"ids": [1, 1.5]}'],
-  ])("loadPosted throws on invalid shape: %s", async ([, payload]) => {
+  ] as const)("loadPosted throws on invalid shape: %s", async ([, payload]) => {
     const path = join(dir, "p.json");
     await writeFile(path, payload);
     await expect(loadPosted(path)).rejects.toThrow(/Invalid posted-events state/);
