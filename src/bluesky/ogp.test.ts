@@ -185,6 +185,34 @@ describe("buildExternalCard", () => {
     expect(uploadBlob).not.toHaveBeenCalled();
   });
 
+  test("stops reading the image body once the cap is exceeded", async () => {
+    const { agent, uploadBlob } = makeAgent();
+    const chunkSize = 300_000;
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 10) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(chunkSize));
+      },
+    });
+    const imageRes = new Response(body, {
+      headers: { "content-type": "image/png" },
+    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(cardybOk()).mockResolvedValueOnce(imageRes);
+
+    const card = await buildExternalCard(agent, baseEvent, fetchMock);
+
+    expect(card.thumb).toBeUndefined();
+    expect(uploadBlob).not.toHaveBeenCalled();
+    // Cap is 1_000_000; with 300_000-byte chunks we should bail after 4 chunks
+    // at most, well before exhausting all 10.
+    expect(pulls).toBeLessThan(10);
+  });
+
   test("cancels response body and omits thumb when image fetch returns non-ok", async () => {
     const { agent, uploadBlob } = makeAgent();
     const cancel = vi.fn().mockResolvedValue(undefined);
