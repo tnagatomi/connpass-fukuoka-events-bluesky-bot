@@ -32,6 +32,15 @@ describe("fetchFukuokaLatestEvents", () => {
     expect(init.headers).toEqual({ "X-API-Key": "secret-key" });
   });
 
+  test("passes an AbortSignal so a hung request can't stall the workflow", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(emptyBody)));
+
+    await fetchFukuokaLatestEvents("k", undefined, fetchMock);
+
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   test("respects custom count parameter", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(emptyBody)));
 
