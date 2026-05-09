@@ -74,4 +74,18 @@ jobs:
           git add posted-events.json
           git commit -m "chore: update posted-events.json"
           auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w 0)"
-          git -c "http.https://github.com/.extraheader=${auth_header}" push
+
+          # Retry with rebase so a concurrent push to main does not lose
+          # the just-recorded posted ids (their absence would re-post events).
+          attempts=0
+          max=3
+          until git -c "http.https://github.com/.extraheader=${auth_header}" push; do
+            attempts=$((attempts + 1))
+            if [ "$attempts" -ge "$max" ]; then
+              echo "git push failed after $attempts attempts" >&2
+              exit 1
+            fi
+            echo "git push failed (attempt $attempts); pulling --rebase before retry" >&2
+            git -c "http.https://github.com/.extraheader=${auth_header}" pull --rebase origin main
+            sleep 2
+          done
