@@ -12,14 +12,19 @@ GitHub Actions (*/5 * * * *)
        ├─ connpass API: GET /api/v2/events/?prefecture=fukuoka&order=3&count=100
        ├─ posted-events.json と diff して未投稿のイベントを抽出
        ├─ 古い順に投稿 (text + facets + OGP カード)
-       └─ 投稿成功した ID を posted-events.json に追記して commit & push
+       │    └─ 1 件投稿成功するたびに posted-events.json を即時更新
+       └─ 最後にまとめて posted-events.json を commit & push
 ```
 
 - 「新着」= ID をはじめて見たもの。更新は無視
 - 初回実行(`posted-events.json` 不存在)は何も投稿せず、現在の上位 100 件を「投稿済み」として記録する
 - 中止イベント (`open_status=cancelled`) は除外
 - 1 件の投稿が失敗しても他は続ける。失敗した ID は記録しないので次回 cron で自動リトライ
-- 状態ファイル `posted-events.json` は GitHub App の installation token で push（リポジトリの ruleset を bypass する必要あり）
+- 投稿ごとに state を即時永続化するため、ループ途中でクラッシュしても次回実行で再投稿しない
+- すべての投稿が失敗した場合は run を失敗扱いにする(部分成功は成功扱い)
+- 1 回の run で投稿開始から 4 分経過したら以降の新規投稿はスキップし、次回 cron に持ち越す(workflow 自体は 10 分でタイムアウト)
+- connpass API への fetch は 10 秒でタイムアウト
+- 状態ファイル `posted-events.json` は GitHub App の installation token で push（リポジトリの ruleset を bypass する必要あり）。bot 本体が失敗した場合でも state の push は走る
 
 ## セットアップ
 
@@ -127,6 +132,8 @@ src/
 │   ├── post-builder.ts    # 投稿テキスト + facets の生成
 │   ├── cardyb.ts          # Bluesky 公式 OGP 抽出 API (cardyb) のクライアント
 │   └── ogp.ts             # cardyb 経由で取得した OG メタデータと画像を OGP カードに変換
+├── state/
+│   └── posted-events.ts   # posted-events.json のロード/保存と新着抽出・追記&pruning
 └── format/
     └── datetime.ts        # ISO-8601 → 「YYYY年M月D日(曜) HH:mm〜」(JST)
 
@@ -150,7 +157,7 @@ https://connpass.com/event/12345/
 
 会場は `place` を優先し、`place` が無ければ `address` を使う。両方とも無ければ場所行を省略する。
 
-300 文字 (graphemes) を超える場合はタイトル末尾を `…` で切り詰める。
+300 文字 (graphemes) を超える場合はタイトル末尾を `…` で切り詰める。タイトルを空にしても収まらないときはタイトルを `…` のみにし、`place` も末尾を `…` で切り詰める。
 
 ## 依存バージョン管理
 
