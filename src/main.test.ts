@@ -89,26 +89,52 @@ describe("runOnce", () => {
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(undefined);
     const fetched = [event(3), event(2), event(1)];
+    const warn = vi.fn().mockResolvedValue(undefined);
 
-    await runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } });
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve(fetched),
+      client: { postEvent },
+      warn,
+    });
 
     expect(postEvent).toHaveBeenCalledTimes(3);
     const saved = JSON.parse(await readFile(statePath, "utf-8"));
     expect(saved.ids).toEqual([99, 1, 3]);
+    expect(warn).toHaveBeenCalledWith({ attempted: 3, successCount: 2 });
+  });
+
+  test("does not warn when every post succeeds", async () => {
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const warn = vi.fn().mockResolvedValue(undefined);
+
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve([event(2), event(1)]),
+      client: { postEvent },
+      warn,
+    });
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   test("throws when every post attempt fails so the run is marked failed", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const postEvent = vi.fn().mockRejectedValue(new Error("boom"));
     const fetched = [event(2), event(1)];
+    const warn = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } }),
+      runOnce(config, {
+        fetchEvents: () => Promise.resolve(fetched),
+        client: { postEvent },
+        warn,
+      }),
     ).rejects.toThrow(/All 2 post attempts failed/);
 
     expect(postEvent).toHaveBeenCalledTimes(2);
     const saved = JSON.parse(await readFile(statePath, "utf-8"));
     expect(saved).toEqual({ ids: [99] });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   test("persists state after each successful post", async () => {

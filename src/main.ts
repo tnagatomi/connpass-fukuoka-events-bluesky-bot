@@ -5,6 +5,7 @@ import {
   createDryRunClient,
   login,
 } from "./bluesky/client.ts";
+import { emitPartialFailureWarning, type PartialFailureInfo } from "./ci/warnings.ts";
 import { type Config, loadConfig } from "./config.ts";
 import { fetchFukuokaLatestEvents } from "./connpass/client.ts";
 import { isPostable } from "./connpass/filter.ts";
@@ -28,6 +29,7 @@ export type RunDeps = {
   fetchEvents: () => Promise<ConnpassEvent[]>;
   client: BlueskyClient;
   now?: () => number;
+  warn?: (info: PartialFailureInfo) => Promise<void>;
 };
 
 export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
@@ -89,6 +91,10 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
 
   if (attempted > 0 && successCount === 0) {
     throw new Error(`All ${attempted} post attempts failed`);
+  }
+  if (successCount < attempted) {
+    const warn = deps.warn ?? emitPartialFailureWarning;
+    await warn({ attempted, successCount });
   }
 }
 
