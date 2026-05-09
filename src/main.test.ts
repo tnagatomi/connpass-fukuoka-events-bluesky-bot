@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runOnce } from "./main.ts";
 import type { Config } from "./config.ts";
+import { MAX_EVENTS_PER_PAGE } from "./connpass/client.ts";
 import type { ConnpassEvent } from "./connpass/types.ts";
 
 const event = (id: number, overrides: Partial<ConnpassEvent> = {}): ConnpassEvent => ({
@@ -47,7 +48,7 @@ describe("runOnce", () => {
     vi.restoreAllMocks();
   });
 
-  test("first run records all ids without posting", async () => {
+  test("first run records all ids oldest-first without posting", async () => {
     const fetchEvents = vi.fn().mockResolvedValue([event(3), event(2), event(1)]);
     const postEvent = vi.fn();
 
@@ -55,7 +56,7 @@ describe("runOnce", () => {
 
     expect(postEvent).not.toHaveBeenCalled();
     const saved = JSON.parse(await readFile(statePath, "utf-8"));
-    expect(saved).toEqual({ ids: [3, 2, 1] });
+    expect(saved).toEqual({ ids: [1, 2, 3] });
   });
 
   test("posts new events oldest-first and saves their ids", async () => {
@@ -121,6 +122,31 @@ describe("runOnce", () => {
 
     await expect(readFile(statePath, "utf-8")).rejects.toThrow();
     expect(postEvent).not.toHaveBeenCalled();
+  });
+
+  test("first-run state preserves newest ids when a later run prunes", async () => {
+    // Fill the dedupe window exactly, as connpass returns them: newest first.
+    const firstRunEvents = Array.from({ length: MAX_EVENTS_PER_PAGE }, (_, i) =>
+      event(MAX_EVENTS_PER_PAGE - i),
+    );
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve(firstRunEvents),
+      client: { postEvent: vi.fn() },
+    });
+
+    const secondRun = [event(200), ...firstRunEvents.slice(0, MAX_EVENTS_PER_PAGE - 1)];
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve(secondRun),
+      client: { postEvent: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    // After prune, only the oldest id (1) drops; ids 2..100 plus the newly posted 200 remain.
+    const saved = JSON.parse(await readFile(statePath, "utf-8")) as { ids: number[] };
+    const expected = [
+      ...Array.from({ length: MAX_EVENTS_PER_PAGE - 1 }, (_, i) => i + 2),
+      200,
+    ];
+    expect(saved.ids).toEqual(expected);
   });
 
   test("dry-run skips state save even after successful posts", async () => {
