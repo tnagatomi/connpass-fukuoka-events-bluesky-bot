@@ -106,6 +106,14 @@ describe("buildPost", () => {
     expect(result.text.startsWith(family + family)).toBe(true);
   });
 
+  test("truncates long place to stay within 300 graphemes", () => {
+    const result = buildPost({ ...baseEvent, place: "あ".repeat(500) });
+    const len = new UnicodeString(result.text).graphemeLength;
+    expect(len).toBeLessThanOrEqual(300);
+    expect(result.text).toContain(`📍 あ`);
+    expect(result.text).toContain(ELLIPSIS);
+  });
+
   test("recomputes facet offsets after truncation", () => {
     const result = buildPost({
       ...baseEvent,
