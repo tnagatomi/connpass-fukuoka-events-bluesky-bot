@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendAndPrune, isFirstRun, loadPosted, pickNew, savePosted } from "./posted-events.ts";
@@ -51,6 +51,24 @@ describe("posted-events file I/O", () => {
     const path = join(dir, "p.json");
     await savePosted(path, { ids: [10, 20, 30] });
     expect(await loadPosted(path)).toEqual({ ids: [10, 20, 30] });
+  });
+
+  test("savePosted cleans up its temp file", async () => {
+    const path = join(dir, "p.json");
+    await savePosted(path, { ids: [1] });
+    expect(await readdir(dir)).toEqual(["p.json"]);
+  });
+
+  test.for([
+    ["top-level array", "[1, 2, 3]"],
+    ["top-level null", "null"],
+    ["missing ids", '{"foo": 1}'],
+    ["ids not array", '{"ids": 1}'],
+    ["ids contains float", '{"ids": [1, 1.5]}'],
+  ] as const)("loadPosted throws on invalid shape: %s", async ([, payload]) => {
+    const path = join(dir, "p.json");
+    await writeFile(path, payload);
+    await expect(loadPosted(path)).rejects.toThrow(/Invalid posted-events state/);
   });
 });
 
