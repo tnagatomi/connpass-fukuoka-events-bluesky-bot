@@ -142,10 +142,7 @@ describe("runOnce", () => {
 
     // After prune, only the oldest id (1) drops; ids 2..100 plus the newly posted 200 remain.
     const saved = JSON.parse(await readFile(statePath, "utf-8")) as { ids: number[] };
-    const expected = [
-      ...Array.from({ length: MAX_EVENTS_PER_PAGE - 1 }, (_, i) => i + 2),
-      200,
-    ];
+    const expected = [...Array.from({ length: MAX_EVENTS_PER_PAGE - 1 }, (_, i) => i + 2), 200];
     expect(saved.ids).toEqual(expected);
   });
 
