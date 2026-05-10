@@ -64,7 +64,7 @@ describe("runOnce", () => {
     // `{ "ids": [] }`. Re-treating that as a first run would silently record
     // the next batch of real events without posting them.
     await writeFile(statePath, JSON.stringify({ ids: [] }));
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue("posted");
 
     await runOnce(config, {
       fetchEvents: () => Promise.resolve([event(2), event(1)]),
@@ -79,7 +79,7 @@ describe("runOnce", () => {
   test("posts new events oldest-first and saves their ids", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const fetched = [event(3), event(2), event(1)];
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue("posted");
 
     await runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } });
 
@@ -91,7 +91,7 @@ describe("runOnce", () => {
   test("filters out cancelled events before posting", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const fetched = [event(2, { open_status: "cancelled" }), event(1, { open_status: "open" })];
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue("posted");
 
     await runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } });
 
@@ -102,9 +102,9 @@ describe("runOnce", () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const postEvent = vi
       .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce("posted")
+      .mockResolvedValueOnce("failed")
+      .mockResolvedValueOnce("posted");
     const fetched = [event(3), event(2), event(1)];
     const warn = vi.fn().mockResolvedValue(undefined);
 
@@ -120,9 +120,28 @@ describe("runOnce", () => {
     expect(warn).toHaveBeenCalledWith({ attempted: 3, successCount: 2 });
   });
 
+  test("treats already_present as success and records the id", async () => {
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const postEvent = vi
+      .fn()
+      .mockResolvedValueOnce("posted")
+      .mockResolvedValueOnce("already_present");
+    const warn = vi.fn().mockResolvedValue(undefined);
+
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve([event(2), event(1)]),
+      client: { postEvent },
+      warn,
+    });
+
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved.ids).toEqual([99, 1, 2]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   test("does not warn when every post succeeds", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue("posted");
     const warn = vi.fn().mockResolvedValue(undefined);
 
     await runOnce(config, {
@@ -136,7 +155,7 @@ describe("runOnce", () => {
 
   test("throws when every post attempt fails so the run is marked failed", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
-    const postEvent = vi.fn().mockRejectedValue(new Error("boom"));
+    const postEvent = vi.fn().mockResolvedValue("failed");
     const fetched = [event(2), event(1)];
     const warn = vi.fn().mockResolvedValue(undefined);
 
@@ -159,6 +178,7 @@ describe("runOnce", () => {
     const observedBeforePost: { ids: number[] }[] = [];
     const postEvent = vi.fn().mockImplementation(async () => {
       observedBeforePost.push(JSON.parse(await readFile(statePath, "utf-8")));
+      return "posted";
     });
 
     await runOnce(config, {
@@ -212,7 +232,7 @@ describe("runOnce", () => {
     const secondRun = [event(newId), ...firstRunEvents.slice(0, MAX_FETCH_EVENTS - 1)];
     await runOnce(config, {
       fetchEvents: () => Promise.resolve(secondRun),
-      client: { postEvent: vi.fn().mockResolvedValue(undefined) },
+      client: { postEvent: vi.fn().mockResolvedValue("posted") },
     });
 
     // After prune, only the oldest id (1) drops; ids 2..MAX plus the newly posted id remain.
@@ -229,6 +249,7 @@ describe("runOnce", () => {
     // iter 2 at t=180s, post -> t=270s; iter 3 at t=270s>240s -> break.
     const postEvent = vi.fn().mockImplementation(async () => {
       t += 90_000;
+      return "posted";
     });
 
     await runOnce(
@@ -249,7 +270,7 @@ describe("runOnce", () => {
   test("dry-run skips state save even after successful posts", async () => {
     const dryConfig: Config = { ...config, dryRun: true };
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue("posted");
 
     await runOnce(dryConfig, {
       fetchEvents: () => Promise.resolve([event(1)]),

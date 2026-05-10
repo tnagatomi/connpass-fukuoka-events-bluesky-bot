@@ -65,13 +65,9 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
       console.log(`Hit batch deadline; deferring ${deferred} events to next run`);
       break;
     }
-    try {
-      // oxlint-disable-next-line no-await-in-loop
-      await deps.client.postEvent(event);
-    } catch (err) {
-      console.error(`Failed to post event ${event.id}:`, err);
-      continue;
-    }
+    // oxlint-disable-next-line no-await-in-loop
+    const result = await deps.client.postEvent(event);
+    if (result === "failed") continue;
     successCount++;
     if (!config.dryRun) {
       currentState = appendAndPrune(currentState, [event.id]);
@@ -96,7 +92,10 @@ export async function main(): Promise<void> {
   const config = loadConfig();
   const client = config.dryRun
     ? createDryRunClient()
-    : createBlueskyClient(await login(config.blueskyHandle, config.blueskyAppPassword));
+    : createBlueskyClient(
+        await login(config.blueskyHandle, config.blueskyAppPassword),
+        config.blueskyHandle,
+      );
 
   await runOnce(config, {
     fetchEvents: () => fetchFukuokaLatestEvents(config.connpassApiKey),
