@@ -42,12 +42,17 @@ jobs:
       # Bluesky post goes out. Without this preflight, a misconfigured token
       # would let posts publish but block the posted-events.json push, and
       # the next cron tick would re-post already-delivered events.
-      # (Ruleset bypass cannot be validated without an actual push.)
+      # permission-contents:write makes the action fail when the installation
+      # lacks Contents:write — without it the token silently inherits the
+      # installation's actual permissions and a Contents:read-only misconfig
+      # only surfaces at push time. (Ruleset bypass still cannot be
+      # validated without an actual push.)
       - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         id: app-token
         with:
           client-id: ${{ secrets.BOT_CLIENT_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-contents: write
 
       - name: Resolve bot user id
         id: bot-user
