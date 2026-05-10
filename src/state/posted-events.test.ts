@@ -120,12 +120,12 @@ describe("appendAndPrune", () => {
     expect(result.ids[99]).toBe(101);
   });
 
-  test("uses default cap of 100", () => {
-    const state = { ids: Array.from({ length: 100 }, (_, i) => i) };
-    const result = appendAndPrune(state, [100]);
-    expect(result.ids).toHaveLength(100);
+  test("uses default cap of 500", () => {
+    const state = { ids: Array.from({ length: 500 }, (_, i) => i) };
+    const result = appendAndPrune(state, [500]);
+    expect(result.ids).toHaveLength(500);
     expect(result.ids[0]).toBe(1);
-    expect(result.ids[99]).toBe(100);
+    expect(result.ids[499]).toBe(500);
   });
 
   test("does not mutate input state", () => {

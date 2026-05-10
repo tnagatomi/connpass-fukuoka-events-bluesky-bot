@@ -1,5 +1,5 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
-import { MAX_EVENTS_PER_PAGE } from "../connpass/client.ts";
+import { MAX_FETCH_EVENTS } from "../connpass/client.ts";
 import type { ConnpassEvent } from "../connpass/types.ts";
 
 export type PostedState = { ids: number[] };
@@ -47,7 +47,7 @@ export function pickNew(state: PostedState, events: ConnpassEvent[]): ConnpassEv
 export function appendAndPrune(
   state: PostedState,
   ids: number[],
-  cap: number = MAX_EVENTS_PER_PAGE,
+  cap: number = MAX_FETCH_EVENTS,
 ): PostedState {
   return { ids: [...state.ids, ...ids].slice(-cap) };
 }

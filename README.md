@@ -10,6 +10,7 @@ GitHub Actions の cron で 5 分間隔で動く。
 GitHub Actions (*/5 * * * *)
   └─ node src/main.ts
        ├─ connpass API: GET /api/v2/events/?prefecture=fukuoka&order=3&count=100
+       │    └─ 最大 5 ページ (count=100 × start=1,101,201,...) まで paginate して直近 500 件を取得
        ├─ posted-events.json と diff して未投稿のイベントを抽出
        ├─ 古い順に投稿 (text + facets + OGP カード)
        │    └─ 1 件投稿成功するたびに posted-events.json を即時更新
@@ -17,13 +18,13 @@ GitHub Actions (*/5 * * * *)
 ```
 
 - 「新着」= ID をはじめて見たもの。更新は無視
-- 初回実行(`posted-events.json` 不存在)は何も投稿せず、現在の上位 100 件を「投稿済み」として記録する
+- 初回実行(`posted-events.json` 不存在)は何も投稿せず、現在見えるイベント(最大 500 件)を「投稿済み」として記録する
 - 中止イベント (`open_status=cancelled`) は除外
 - 1 件の投稿が失敗しても他は続ける。失敗した ID は記録しないので次回 cron で自動リトライ
 - 投稿ごとに state を即時永続化するため、ループ途中でクラッシュしても次回実行で再投稿しない
 - すべての投稿が失敗した場合は run を失敗扱いにする(部分成功は成功扱い)
 - 1 回の run で投稿開始から 4 分経過したら以降の新規投稿はスキップし、次回 cron に持ち越す(workflow 自体は 10 分でタイムアウト)
-- connpass API への fetch は 10 秒でタイムアウト
+- connpass API への fetch は 1 ページごとに 10 秒でタイムアウト (最悪 5 ページで ~50 秒)
 - 状態ファイル `posted-events.json` は GitHub App の installation token で push（リポジトリの ruleset を bypass する必要あり）。bot 本体が失敗した場合でも state の push は走る
 
 ## セットアップ
@@ -100,7 +101,7 @@ GitHub 上で:
 
 1. Actions タブ → **Post Events** workflow → **Run workflow**
 2. `dry_run` を **true** にして実行 → 配線確認
-3. `dry_run` を **false** で実行 → 初回は「上位 100 件を `posted-events.json` に記録するだけ」で投稿は 0 件
+3. `dry_run` を **false** で実行 → 初回は「現時点で見えるイベント (最大 500 件) を `posted-events.json` に記録するだけ」で投稿は 0 件
 4. 2 回目以降の cron で新着分のみ投稿される
 
 cron は `*/5 * * * *` (5 分間隔)。GitHub Actions の遅延により実際は数分のずれが生じることがある。
@@ -141,7 +142,7 @@ src/
 ├── ci.yml                 # PR/push のテスト・lint・format・typecheck
 └── post.yml               # 5 分 cron で bot を実行する本番 workflow
 
-posted-events.json         # 直近 100 件の投稿済みイベント ID
+posted-events.json         # 直近 500 件の投稿済みイベント ID (dedupe window)
 ```
 
 ## 投稿フォーマット
