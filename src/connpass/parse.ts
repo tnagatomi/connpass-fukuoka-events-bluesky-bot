@@ -10,6 +10,27 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+// YYYY-MM-DDTHH:mm[:ss[.fff]] with a required Z/±HH:MM offset. Calendar
+// fields are checked below because Date.parse silently rolls over invalid
+// days (e.g. Feb 31 → Mar 3). The offset is required because formatting an
+// offset-less string would interpret the time in the host's local timezone,
+// which on a UTC CI runner shifts the displayed date by hours.
+const ISO_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/;
+
+function asIsoDateTime(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = ISO_DATETIME_RE.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return null;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > lastDay) return null;
+  return Number.isNaN(new Date(value).getTime()) ? null : value;
+}
+
 function isWebUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {
@@ -34,7 +55,7 @@ export function parseEvent(raw: unknown): ConnpassEvent | null {
     title: r.title,
     url: r.url,
     open_status: r.open_status,
-    started_at: asString(r.started_at),
+    started_at: asIsoDateTime(r.started_at),
     place: asString(r.place),
     address: asString(r.address),
     catch: asString(r.catch),
