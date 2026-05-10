@@ -57,9 +57,18 @@ describe("parseEvent", () => {
     expect(parseEvent({ ...validRaw, title: 42 })).toBeNull();
   });
 
-  test("returns null when url is missing or not a string", () => {
+  test("returns null when url is missing, empty, unparseable, or non-http(s)", () => {
     expect(parseEvent({ ...validRaw, url: undefined })).toBeNull();
     expect(parseEvent({ ...validRaw, url: 42 })).toBeNull();
+    expect(parseEvent({ ...validRaw, url: "" })).toBeNull();
+    expect(parseEvent({ ...validRaw, url: "not a url" })).toBeNull();
+    expect(parseEvent({ ...validRaw, url: "javascript:alert(1)" })).toBeNull();
+    expect(parseEvent({ ...validRaw, url: "ftp://example.com/x" })).toBeNull();
+  });
+
+  test("accepts http and https urls", () => {
+    expect(parseEvent({ ...validRaw, url: "http://connpass.com/event/100/" })).not.toBeNull();
+    expect(parseEvent({ ...validRaw, url: "https://connpass.com/event/100/" })).not.toBeNull();
   });
 
   test("returns null when open_status is missing or not one of the union values", () => {
