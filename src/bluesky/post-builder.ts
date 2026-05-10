@@ -71,6 +71,11 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
       place =
         sliceToBudget(place, Math.max(0, placeGraphemeBudget), Math.max(0, placeByteBudget)) +
         ELLIPSIS;
+    } else {
+      // No place line to shrink. Drop the title so we don't leave its full
+      // text in an over-limit post. If the URL itself is the overhead, the
+      // post may still exceed MAX_BYTES — that's a connpass-side anomaly.
+      title = "";
     }
     text = compose();
     unicode = new UnicodeString(text);

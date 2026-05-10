@@ -119,6 +119,22 @@ describe("buildPost", () => {
     expect(result.text.startsWith(family)).toBe(true);
   });
 
+  test("drops the title when overhead alone exceeds budget and place is unavailable", () => {
+    // A pathologically long URL pushes overhead past MAX_BYTES on its own.
+    // Without a place line to shrink, the original title used to slip
+    // through unchanged; now it must be dropped.
+    const longUrl = `https://example.com/${"a".repeat(2900)}`;
+    const result = buildPost({
+      ...baseEvent,
+      title: "Original title",
+      url: longUrl,
+      place: null,
+      address: null,
+    });
+    expect(result.text).not.toContain("Original title");
+    expect(result.text).toContain(longUrl);
+  });
+
   test("truncates long place to stay within 300 graphemes", () => {
     const result = buildPost({ ...baseEvent, place: "あ".repeat(500) });
     const len = new UnicodeString(result.text).graphemeLength;
