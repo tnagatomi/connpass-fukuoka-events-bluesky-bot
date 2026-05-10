@@ -37,6 +37,28 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Mint the GitHub App token and resolve the bot user *before* posting
+      # so credential / installation failures abort the run before any
+      # Bluesky post goes out. Without this preflight, a misconfigured token
+      # would let posts publish but block the posted-events.json push, and
+      # the next cron tick would re-post already-delivered events.
+      # (Ruleset bypass cannot be validated without an actual push.)
+      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        id: app-token
+        with:
+          client-id: ${{ secrets.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Resolve bot user id
+        id: bot-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          slug='${{ steps.app-token.outputs.app-slug }}'
+          id=$(gh api "/users/${slug}[bot]" --jq .id)
+          echo "id=${id}" >> "$GITHUB_OUTPUT"
+          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
+
       # Keep going on failure so any ids already saved by the bot still get
       # pushed to main; otherwise a mid-loop crash drops the runner FS and
       # the next cron tick re-posts already-delivered events. The final step
@@ -56,24 +78,6 @@ jobs:
           if [ -n "$(git status --porcelain posted-events.json)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
-        if: steps.changes.outputs.changed == 'true'
-        id: app-token
-        with:
-          client-id: ${{ secrets.BOT_CLIENT_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-
-      - name: Resolve bot user id
-        if: steps.changes.outputs.changed == 'true'
-        id: bot-user
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          slug='${{ steps.app-token.outputs.app-slug }}'
-          id=$(gh api "/users/${slug}[bot]" --jq .id)
-          echo "id=${id}" >> "$GITHUB_OUTPUT"
-          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push posted-events.json
         if: steps.changes.outputs.changed == 'true'
