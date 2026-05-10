@@ -22,7 +22,7 @@ GitHub Actions (*/5 * * * *)
 - 中止イベント (`open_status=cancelled`) は除外
 - 1 件の投稿が失敗しても他は続ける。失敗した ID は記録しないので次回 cron で自動リトライ
 - 投稿ごとに state を即時永続化するため、ループ途中でクラッシュしても次回実行で再投稿しない
-- すべての投稿が失敗した場合は run を失敗扱いにする(部分成功は成功扱い)
+- すべての投稿が失敗した場合は run を失敗扱いにする(部分失敗時は workflow warning と Step Summary を出して成功扱い)
 - 1 回の run で投稿開始から 4 分経過したら以降の新規投稿はスキップし、次回 cron に持ち越す(workflow 自体は 10 分でタイムアウト)
 - connpass API への fetch は 1 ページごとに 10 秒でタイムアウト (最悪 5 ページで ~50 秒)
 - 状態ファイル `posted-events.json` は GitHub App の installation token で push（リポジトリの ruleset を bypass する必要あり）。bot 本体が失敗した場合でも state の push は走る
