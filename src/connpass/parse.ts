@@ -10,12 +10,13 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-// YYYY-MM-DDTHH:mm[:ss[.fff]] with optional Z/±HH:MM offset. Hour/minute
-// ranges are left to Date.parse below; calendar fields are checked above
-// because Date.parse silently rolls over invalid days (e.g. Feb 31 → Mar 3),
-// which would otherwise let the bot post the wrong day to Bluesky.
+// YYYY-MM-DDTHH:mm[:ss[.fff]] with a required Z/±HH:MM offset. Calendar
+// fields are checked below because Date.parse silently rolls over invalid
+// days (e.g. Feb 31 → Mar 3). The offset is required because formatting an
+// offset-less string would interpret the time in the host's local timezone,
+// which on a UTC CI runner shifts the displayed date by hours.
 const ISO_DATETIME_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
 function asIsoDateTime(value: unknown): string | null {
   if (typeof value !== "string") return null;

@@ -68,6 +68,13 @@ describe("parseEvent", () => {
     );
   });
 
+  test("rejects started_at without a timezone offset", () => {
+    // Without an offset, formatting interprets the time in the host's local
+    // tz; on a UTC CI runner that shifts "19:00" to a different calendar day.
+    expect(parseEvent({ ...validRaw, started_at: "2026-05-15T19:00" })!.started_at).toBeNull();
+    expect(parseEvent({ ...validRaw, started_at: "2026-05-15T19:00:00" })!.started_at).toBeNull();
+  });
+
   test("returns null when raw is not an object", () => {
     expect(parseEvent(null)).toBeNull();
     expect(parseEvent("event")).toBeNull();
