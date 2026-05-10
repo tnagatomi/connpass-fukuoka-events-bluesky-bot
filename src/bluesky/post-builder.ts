@@ -2,8 +2,13 @@ import { AppBskyRichtextFacet, UnicodeString } from "@atproto/api";
 import type { ConnpassEvent } from "../connpass/types.ts";
 import { formatJpDateTime } from "../format/datetime.ts";
 
+// AtProto post text caps both maxGraphemes (300) and maxLength (3000 UTF-8
+// bytes). A 25-byte ZWJ family emoji can stay under 300 graphemes while
+// blowing past 3000 bytes, so both axes must be enforced.
 const MAX_GRAPHEMES = 300;
+const MAX_BYTES = 3000;
 const ELLIPSIS = "…";
+const ELLIPSIS_BYTES = new UnicodeString(ELLIPSIS).utf8.byteLength;
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 export type BuiltPost = {
@@ -11,18 +16,23 @@ export type BuiltPost = {
   facets: AppBskyRichtextFacet.Main[];
 };
 
-function sliceGraphemes(str: string, max: number): string {
-  if (max <= 0) return "";
+function sliceToBudget(str: string, maxGraphemes: number, maxBytes: number): string {
+  if (maxGraphemes <= 0 || maxBytes <= 0) return "";
   const out: string[] = [];
+  let bytes = 0;
   for (const { segment } of segmenter.segment(str)) {
-    if (out.length === max) return out.join("");
+    if (out.length === maxGraphemes) return out.join("");
+    const segBytes = new UnicodeString(segment).utf8.byteLength;
+    if (bytes + segBytes > maxBytes) return out.join("");
+    bytes += segBytes;
     out.push(segment);
   }
   return str;
 }
 
 export function buildPost(event: ConnpassEvent): BuiltPost {
-  const link = event.url;
+  const linkUri = event.url;
+  let linkText = event.url;
   let title = event.title;
   let place = event.place ?? event.address;
 
@@ -34,33 +44,68 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
     if (place) {
       lines.push(`📍 ${place}`);
     }
-    lines.push("", link);
+    lines.push("", linkText);
     return lines.join("\n");
   };
 
   let text = compose();
   let unicode = new UnicodeString(text);
-  if (unicode.graphemeLength > MAX_GRAPHEMES) {
-    const titleGraphemes = new UnicodeString(title).graphemeLength;
-    const overhead = unicode.graphemeLength - titleGraphemes;
-    const maxTitleGraphemes = MAX_GRAPHEMES - overhead - 1;
-    if (maxTitleGraphemes >= 0) {
-      title = sliceGraphemes(title, maxTitleGraphemes) + ELLIPSIS;
+  if (unicode.graphemeLength > MAX_GRAPHEMES || unicode.utf8.byteLength > MAX_BYTES) {
+    const titleUni = new UnicodeString(title);
+    const overheadGraphemes = unicode.graphemeLength - titleUni.graphemeLength;
+    const overheadBytes = unicode.utf8.byteLength - titleUni.utf8.byteLength;
+    const titleGraphemeBudget = MAX_GRAPHEMES - overheadGraphemes - 1;
+    const titleByteBudget = MAX_BYTES - overheadBytes - ELLIPSIS_BYTES;
+    if (titleGraphemeBudget >= 0 && titleByteBudget >= 0) {
+      title = sliceToBudget(title, titleGraphemeBudget, titleByteBudget) + ELLIPSIS;
     } else if (place) {
       // Even an empty title can't bring overhead under MAX. Drop title to
       // just the ellipsis and truncate place to fit the remaining budget.
       title = ELLIPSIS;
-      const placeGraphemes = new UnicodeString(place).graphemeLength;
-      // overhead excludes the original title; replacing it with ELLIPSIS adds 1.
-      const fixedOverhead = overhead - placeGraphemes + 1;
-      const maxPlaceGraphemes = MAX_GRAPHEMES - fixedOverhead - 1;
-      place = sliceGraphemes(place, Math.max(0, maxPlaceGraphemes)) + ELLIPSIS;
+      const placeUni = new UnicodeString(place);
+      // overhead excludes the original title; replacing it with ELLIPSIS adds
+      // 1 grapheme and ELLIPSIS_BYTES bytes.
+      const fixedOverheadGraphemes = overheadGraphemes - placeUni.graphemeLength + 1;
+      const fixedOverheadBytes = overheadBytes - placeUni.utf8.byteLength + ELLIPSIS_BYTES;
+      const placeGraphemeBudget = MAX_GRAPHEMES - fixedOverheadGraphemes - 1;
+      const placeByteBudget = MAX_BYTES - fixedOverheadBytes - ELLIPSIS_BYTES;
+      place =
+        sliceToBudget(place, Math.max(0, placeGraphemeBudget), Math.max(0, placeByteBudget)) +
+        ELLIPSIS;
+    } else {
+      // No place line to shrink. Drop the title so the URL-shrink step below
+      // gets a clean budget to work with.
+      title = "";
     }
     text = compose();
     unicode = new UnicodeString(text);
   }
 
-  const linkStartUtf16 = text.length - link.length;
+  // If the URL itself is so long that the post still breaches the limit,
+  // shrink the visible link text. The facet keeps the full URL as its uri,
+  // so clicks still resolve to the original link.
+  if (unicode.graphemeLength > MAX_GRAPHEMES || unicode.utf8.byteLength > MAX_BYTES) {
+    const linkUni = new UnicodeString(linkText);
+    const overheadGraphemes = unicode.graphemeLength - linkUni.graphemeLength;
+    const overheadBytes = unicode.utf8.byteLength - linkUni.utf8.byteLength;
+    const linkGraphemeBudget = MAX_GRAPHEMES - overheadGraphemes - 1;
+    const linkByteBudget = MAX_BYTES - overheadBytes - ELLIPSIS_BYTES;
+    linkText =
+      sliceToBudget(linkUri, Math.max(0, linkGraphemeBudget), Math.max(0, linkByteBudget)) +
+      ELLIPSIS;
+    text = compose();
+    unicode = new UnicodeString(text);
+  }
+
+  // By this point title/place/linkText shrinkage must have brought the post
+  // under both caps. Reaching this branch means the budget math is wrong.
+  if (unicode.graphemeLength > MAX_GRAPHEMES || unicode.utf8.byteLength > MAX_BYTES) {
+    throw new Error(
+      `buildPost produced over-limit text: ${unicode.graphemeLength} graphemes, ${unicode.utf8.byteLength} bytes`,
+    );
+  }
+
+  const linkStartUtf16 = text.length - linkText.length;
   return {
     text,
     facets: [
@@ -69,7 +114,7 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
           byteStart: unicode.utf16IndexToUtf8Index(linkStartUtf16),
           byteEnd: unicode.utf8.byteLength,
         },
-        features: [{ $type: "app.bsky.richtext.facet#link", uri: link }],
+        features: [{ $type: "app.bsky.richtext.facet#link", uri: linkUri }],
       },
     ],
   };
