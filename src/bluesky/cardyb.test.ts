@@ -53,6 +53,16 @@ describe("extractCardyb", () => {
     expect(result).toEqual({ title: "", description: "", image: "" });
   });
 
+  test("coerces non-string fields to empty strings", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: "", title: 1, description: null, image: [] }));
+
+    const result = await extractCardyb(SAMPLE_URL, fetchMock);
+
+    expect(result).toEqual({ title: "", description: "", image: "" });
+  });
+
   test("returns null when the extract response has a non-empty error", async () => {
     const fetchMock = vi
       .fn()

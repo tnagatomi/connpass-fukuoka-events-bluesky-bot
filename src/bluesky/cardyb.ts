@@ -29,10 +29,13 @@ export async function extractCardyb(
     }
     const data = (await res.json()) as CardybResponse;
     if (data.error) return null;
+    // The cast above is a lie — `res.json()` returns unknown shapes. A
+    // non-string description or image leaking through would later fail
+    // AtProto's external embed validation, so coerce per-field here.
     return {
-      title: data.title ?? "",
-      description: data.description ?? "",
-      image: data.image ?? "",
+      title: typeof data.title === "string" ? data.title : "",
+      description: typeof data.description === "string" ? data.description : "",
+      image: typeof data.image === "string" ? data.image : "",
     };
   } catch {
     return null;
