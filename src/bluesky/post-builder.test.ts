@@ -97,13 +97,26 @@ describe("buildPost", () => {
   });
 
   test("does not split ZWJ grapheme clusters when truncating titles", () => {
-    // Family-of-4 emoji is a single grapheme made of 7 code points (11 UTF-16 units).
+    // At 25 UTF-8 bytes per family emoji the byte budget caps before the
+    // grapheme budget, but the cluster must still survive intact.
     const family = "👨‍👩‍👧‍👦";
     const result = buildPost({ ...baseEvent, title: family.repeat(400), place: "場所" });
-    const len = new UnicodeString(result.text).graphemeLength;
-    expect(len).toBeLessThanOrEqual(300);
-    expect(len).toBeGreaterThanOrEqual(270);
+    const u = new UnicodeString(result.text);
+    expect(u.graphemeLength).toBeLessThanOrEqual(300);
+    expect(u.utf8.byteLength).toBeLessThanOrEqual(3000);
     expect(result.text.startsWith(family + family)).toBe(true);
+  });
+
+  test("truncates titles that fit 300 graphemes but exceed 3000 UTF-8 bytes", () => {
+    // Without a byte cap this input (200 graphemes, ~5000 bytes) would slip
+    // past the grapheme limit and fail at AtProto's lexicon validation.
+    const family = "👨‍👩‍👧‍👦";
+    const result = buildPost({ ...baseEvent, title: family.repeat(200), place: "場所" });
+    const u = new UnicodeString(result.text);
+    expect(u.graphemeLength).toBeLessThanOrEqual(300);
+    expect(u.utf8.byteLength).toBeLessThanOrEqual(3000);
+    expect(result.text).toContain(ELLIPSIS);
+    expect(result.text.startsWith(family)).toBe(true);
   });
 
   test("truncates long place to stay within 300 graphemes", () => {
