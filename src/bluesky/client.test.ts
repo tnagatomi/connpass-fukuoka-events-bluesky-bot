@@ -4,6 +4,18 @@ import { type Poster, createBlueskyClient } from "./client.ts";
 import type { PostSearcher } from "./lookup.ts";
 import type { ConnpassEvent } from "../connpass/types.ts";
 
+vi.mock("./ogp.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./ogp.ts")>();
+  return {
+    ...actual,
+    buildExternalCard: vi.fn(async (_agent, event) => ({
+      uri: event.url,
+      title: event.title,
+      description: "",
+    })),
+  };
+});
+
 const fakeBlobRef = { mimeType: "image/jpeg", size: 100 } as unknown as BlobRef;
 
 const author = "bot.bsky.social";
