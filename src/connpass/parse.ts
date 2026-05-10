@@ -10,6 +10,13 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function asIsoDateTime(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  // Reject Invalid Date strings here so downstream date formatting can't
+  // throw RangeError and trap the bot in a permanent post-failure retry.
+  return Number.isNaN(new Date(value).getTime()) ? null : value;
+}
+
 function isWebUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {
@@ -34,7 +41,7 @@ export function parseEvent(raw: unknown): ConnpassEvent | null {
     title: r.title,
     url: r.url,
     open_status: r.open_status,
-    started_at: asString(r.started_at),
+    started_at: asIsoDateTime(r.started_at),
     place: asString(r.place),
     address: asString(r.address),
     catch: asString(r.catch),

@@ -39,6 +39,12 @@ describe("parseEvent", () => {
     expect(event!.address).toBeNull();
   });
 
+  test("rejects unparseable started_at strings to avoid runtime format errors", () => {
+    expect(parseEvent({ ...validRaw, started_at: "not a date" })!.started_at).toBeNull();
+    expect(parseEvent({ ...validRaw, started_at: "" })!.started_at).toBeNull();
+    expect(parseEvent({ ...validRaw, started_at: "2026-13-40T99:99:99" })!.started_at).toBeNull();
+  });
+
   test("returns null when raw is not an object", () => {
     expect(parseEvent(null)).toBeNull();
     expect(parseEvent("event")).toBeNull();
