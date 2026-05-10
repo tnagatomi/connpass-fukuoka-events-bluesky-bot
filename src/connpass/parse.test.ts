@@ -45,6 +45,29 @@ describe("parseEvent", () => {
     expect(parseEvent({ ...validRaw, started_at: "2026-13-40T99:99:99" })!.started_at).toBeNull();
   });
 
+  test("rejects calendar-overflow started_at that Date would silently roll forward", () => {
+    // new Date("2026-02-31...") rolls forward to March 3, which would post
+    // the wrong day. Reject these at parse time.
+    expect(
+      parseEvent({ ...validRaw, started_at: "2026-02-31T19:00:00+09:00" })!.started_at,
+    ).toBeNull();
+    expect(
+      parseEvent({ ...validRaw, started_at: "2026-04-31T19:00:00+09:00" })!.started_at,
+    ).toBeNull();
+    expect(
+      parseEvent({ ...validRaw, started_at: "2026-13-01T19:00:00+09:00" })!.started_at,
+    ).toBeNull();
+    expect(
+      parseEvent({ ...validRaw, started_at: "2025-02-29T19:00:00+09:00" })!.started_at,
+    ).toBeNull();
+  });
+
+  test("accepts the leap-day Feb 29 in leap years", () => {
+    expect(parseEvent({ ...validRaw, started_at: "2024-02-29T19:00:00+09:00" })!.started_at).toBe(
+      "2024-02-29T19:00:00+09:00",
+    );
+  });
+
   test("returns null when raw is not an object", () => {
     expect(parseEvent(null)).toBeNull();
     expect(parseEvent("event")).toBeNull();

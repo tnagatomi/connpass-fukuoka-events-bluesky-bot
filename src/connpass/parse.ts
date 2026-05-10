@@ -10,10 +10,23 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+// YYYY-MM-DDTHH:mm[:ss[.fff]] with optional Z/±HH:MM offset. Hour/minute
+// ranges are left to Date.parse below; calendar fields are checked above
+// because Date.parse silently rolls over invalid days (e.g. Feb 31 → Mar 3),
+// which would otherwise let the bot post the wrong day to Bluesky.
+const ISO_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+
 function asIsoDateTime(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  // Reject Invalid Date strings here so downstream date formatting can't
-  // throw RangeError and trap the bot in a permanent post-failure retry.
+  const match = ISO_DATETIME_RE.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return null;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > lastDay) return null;
   return Number.isNaN(new Date(value).getTime()) ? null : value;
 }
 
