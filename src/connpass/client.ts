@@ -1,4 +1,4 @@
-import { parseEvents } from "./parse.ts";
+import { parseEvents, type ParsedEventsPage } from "./parse.ts";
 import type { ConnpassEvent } from "./types.ts";
 
 const ENDPOINT = "https://connpass.com/api/v2/events/";
@@ -36,10 +36,13 @@ export async function fetchFukuokaLatestEvents(
   for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
     const start = pageIndex * MAX_EVENTS_PER_PAGE + 1;
     // oxlint-disable-next-line no-await-in-loop
-    const page = await fetchPage(apiKey, start, fetchImpl);
-    all.push(...page);
+    const { events, rawCount } = await fetchPage(apiKey, start, fetchImpl);
+    all.push(...events);
 
-    if (page.length < MAX_EVENTS_PER_PAGE) break;
+    // Use the raw response count, not the parsed count: a single malformed
+    // event in an otherwise full page would short-circuit pagination and
+    // silently drop later pages.
+    if (rawCount < MAX_EVENTS_PER_PAGE) break;
   }
 
   return all;
@@ -49,7 +52,7 @@ async function fetchPage(
   apiKey: string,
   start: number,
   fetchImpl: typeof fetch,
-): Promise<ConnpassEvent[]> {
+): Promise<ParsedEventsPage> {
   const url = new URL(ENDPOINT);
   url.searchParams.set("prefecture", "fukuoka");
   url.searchParams.set("order", ORDER_NEWEST);

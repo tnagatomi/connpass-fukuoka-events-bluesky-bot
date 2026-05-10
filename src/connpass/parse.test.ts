@@ -97,22 +97,24 @@ describe("parseEvents", () => {
     expect(() => parseEvents({})).toThrow("not an array");
   });
 
-  test("returns the parsed array when every event is valid", () => {
-    const events = parseEvents({ events: [validRaw, { ...validRaw, id: 101 }] });
+  test("returns the parsed array and raw count when every event is valid", () => {
+    const { events, rawCount } = parseEvents({ events: [validRaw, { ...validRaw, id: 101 }] });
 
     expect(events).toHaveLength(2);
     expect(events[0]!.id).toBe(100);
     expect(events[1]!.id).toBe(101);
+    expect(rawCount).toBe(2);
   });
 
-  test("skips invalid events and warns instead of throwing", () => {
+  test("skips invalid events but reports the raw count so pagination doesn't short-circuit", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const events = parseEvents({
+      const { events, rawCount } = parseEvents({
         events: [validRaw, { id: "bad" }, { ...validRaw, id: 101 }],
       });
 
       expect(events.map((e) => e.id)).toEqual([100, 101]);
+      expect(rawCount).toBe(3);
       expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
