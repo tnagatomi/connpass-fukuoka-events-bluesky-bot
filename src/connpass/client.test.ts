@@ -152,7 +152,7 @@ describe("fetchFukuokaLatestEvents pagination", () => {
   test("throws when the response envelope is malformed", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({})));
 
-    await expect(fetchFukuokaLatestEvents("k", undefined, fetchMock)).rejects.toThrow(
+    await expect(fetchFukuokaLatestEvents("k", { fetchImpl: fetchMock })).rejects.toThrow(
       "events is not an array",
     );
   });
@@ -183,7 +183,7 @@ describe("fetchFukuokaLatestEvents pagination", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
-      const events = await fetchFukuokaLatestEvents("k", undefined, fetchMock);
+      const events = await fetchFukuokaLatestEvents("k", { fetchImpl: fetchMock });
       expect(events.map((e) => e.id)).toEqual([200]);
       expect(warn).toHaveBeenCalledTimes(1);
     } finally {
