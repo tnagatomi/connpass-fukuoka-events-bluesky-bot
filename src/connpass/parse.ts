@@ -48,7 +48,12 @@ export function parseEvent(raw: unknown): ConnpassEvent | null {
   };
 }
 
-export function parseEvents(raw: unknown): ConnpassEvent[] {
+export type ParsedEventsPage = {
+  events: ConnpassEvent[];
+  rawCount: number;
+};
+
+export function parseEvents(raw: unknown): ParsedEventsPage {
   if (typeof raw !== "object" || raw === null) {
     throw new Error("connpass response is not an object");
   }
@@ -66,5 +71,5 @@ export function parseEvents(raw: unknown): ConnpassEvent[] {
     }
     parsed.push(event);
   }
-  return parsed;
+  return { events: parsed, rawCount: events.length };
 }

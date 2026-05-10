@@ -18,7 +18,7 @@ const event = (id: number): ConnpassEvent => ({
   open_status: "open",
 });
 
-const responseFor = (events: ConnpassEvent[], start: number) =>
+const responseFor = (events: readonly unknown[], start: number) =>
   new Response(
     JSON.stringify({
       results_returned: events.length,
@@ -155,6 +155,29 @@ describe("fetchFukuokaLatestEvents pagination", () => {
     await expect(fetchFukuokaLatestEvents("k", { fetchImpl: fetchMock })).rejects.toThrow(
       "events is not an array",
     );
+  });
+
+  // Regression: pagination used to break when parsed-event count fell below
+  // MAX_EVENTS_PER_PAGE, so a single malformed event in an otherwise full
+  // page would silently drop pages 2..N.
+  test("fetches page 2 when raw page 1 is full but one event failed validation", async () => {
+    const valid99 = fullPage(500).slice(0, 99);
+    const rawPage1 = [...valid99, { id: "bad" }];
+    const page2 = [event(400)];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(responseFor(rawPage1, 1))
+      .mockResolvedValueOnce(responseFor(page2, 101));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const result = await fetchFukuokaLatestEvents("k", { fetchImpl: fetchMock });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.map((e) => e.id)).toEqual([...valid99.map((e) => e.id), 400]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test("skips events that fail validation and keeps the valid ones", async () => {
