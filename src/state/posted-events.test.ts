@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendAndPrune, isFirstRun, loadPosted, pickNew, savePosted } from "./posted-events.ts";
+import { appendAndPrune, loadPosted, pickNew, savePosted } from "./posted-events.ts";
 import type { ConnpassEvent } from "../connpass/types.ts";
 
 const event = (id: number): ConnpassEvent => ({
@@ -30,14 +30,29 @@ describe("posted-events file I/O", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("loadPosted returns empty state when file does not exist", async () => {
-    expect(await loadPosted(join(dir, "missing.json"))).toEqual({ ids: [] });
+  test("loadPosted flags first run when the file does not exist", async () => {
+    expect(await loadPosted(join(dir, "missing.json"))).toEqual({
+      state: { ids: [] },
+      isFirstRun: true,
+    });
   });
 
-  test("loadPosted reads ids from existing file", async () => {
+  test("loadPosted reads ids from existing file and is not a first run", async () => {
     const path = join(dir, "p.json");
     await writeFile(path, JSON.stringify({ ids: [1, 2, 3] }));
-    expect(await loadPosted(path)).toEqual({ ids: [1, 2, 3] });
+    expect(await loadPosted(path)).toEqual({
+      state: { ids: [1, 2, 3] },
+      isFirstRun: false,
+    });
+  });
+
+  test("loadPosted treats an existing empty-ids file as not a first run", async () => {
+    const path = join(dir, "p.json");
+    await writeFile(path, JSON.stringify({ ids: [] }));
+    expect(await loadPosted(path)).toEqual({
+      state: { ids: [] },
+      isFirstRun: false,
+    });
   });
 
   test("savePosted writes pretty-printed JSON with trailing newline", async () => {
@@ -50,7 +65,10 @@ describe("posted-events file I/O", () => {
   test("savePosted + loadPosted round-trip", async () => {
     const path = join(dir, "p.json");
     await savePosted(path, { ids: [10, 20, 30] });
-    expect(await loadPosted(path)).toEqual({ ids: [10, 20, 30] });
+    expect(await loadPosted(path)).toEqual({
+      state: { ids: [10, 20, 30] },
+      isFirstRun: false,
+    });
   });
 
   test("savePosted cleans up its temp file", async () => {
@@ -69,16 +87,6 @@ describe("posted-events file I/O", () => {
     const path = join(dir, "p.json");
     await writeFile(path, payload);
     await expect(loadPosted(path)).rejects.toThrow(/Invalid posted-events state/);
-  });
-});
-
-describe("isFirstRun", () => {
-  test("true when ids is empty", () => {
-    expect(isFirstRun({ ids: [] })).toBe(true);
-  });
-
-  test("false when ids has any entry", () => {
-    expect(isFirstRun({ ids: [1] })).toBe(false);
   });
 });
 

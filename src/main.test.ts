@@ -59,6 +59,23 @@ describe("runOnce", () => {
     expect(saved).toEqual({ ids: [1, 2, 3] });
   });
 
+  test("existing empty state is not treated as a first run", async () => {
+    // Regression guard: a previous run that filtered every fetched event left
+    // `{ "ids": [] }`. Re-treating that as a first run would silently record
+    // the next batch of real events without posting them.
+    await writeFile(statePath, JSON.stringify({ ids: [] }));
+    const postEvent = vi.fn().mockResolvedValue(undefined);
+
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve([event(2), event(1)]),
+      client: { postEvent },
+    });
+
+    expect(postEvent.mock.calls.map((c) => (c[0] as ConnpassEvent).id)).toEqual([1, 2]);
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved.ids).toEqual([1, 2]);
+  });
+
   test("posts new events oldest-first and saves their ids", async () => {
     await writeFile(statePath, JSON.stringify({ ids: [99] }));
     const fetched = [event(3), event(2), event(1)];

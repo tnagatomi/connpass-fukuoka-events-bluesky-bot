@@ -10,13 +10,7 @@ import { type Config, loadConfig } from "./config.ts";
 import { fetchFukuokaLatestEvents } from "./connpass/client.ts";
 import { isPostable } from "./connpass/filter.ts";
 import type { ConnpassEvent } from "./connpass/types.ts";
-import {
-  appendAndPrune,
-  isFirstRun,
-  loadPosted,
-  pickNew,
-  savePosted,
-} from "./state/posted-events.ts";
+import { appendAndPrune, loadPosted, pickNew, savePosted } from "./state/posted-events.ts";
 
 // Stop *starting* new posts after this many ms so the job can finish its
 // state-persisting steps within the 10-minute backstop in post.yml. The
@@ -34,13 +28,13 @@ export type RunDeps = {
 
 export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   const now = deps.now ?? Date.now;
-  const [state, fetched] = await Promise.all([
+  const [{ state, isFirstRun }, fetched] = await Promise.all([
     loadPosted(config.postedEventsPath),
     deps.fetchEvents(),
   ]);
   const events = fetched.filter(isPostable);
 
-  if (isFirstRun(state)) {
+  if (isFirstRun) {
     // connpass returns events newest-first; appendAndPrune retains its tail,
     // so store oldest-first to preserve the most recent ids across later prunes.
     const ids = events.map((e) => e.id).toReversed();
