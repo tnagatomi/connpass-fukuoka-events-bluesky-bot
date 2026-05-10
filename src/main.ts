@@ -10,13 +10,7 @@ import { type Config, loadConfig } from "./config.ts";
 import { fetchFukuokaLatestEvents } from "./connpass/client.ts";
 import { isPostable } from "./connpass/filter.ts";
 import type { ConnpassEvent } from "./connpass/types.ts";
-import {
-  appendAndPrune,
-  isFirstRun,
-  loadPosted,
-  pickNew,
-  savePosted,
-} from "./state/posted-events.ts";
+import { appendAndPrune, loadPosted, pickNew, savePosted } from "./state/posted-events.ts";
 
 // Stop *starting* new posts after this many ms so the job can finish its
 // state-persisting steps within the 10-minute backstop in post.yml. The
@@ -34,13 +28,13 @@ export type RunDeps = {
 
 export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   const now = deps.now ?? Date.now;
-  const [state, fetched] = await Promise.all([
+  const [{ state, isFirstRun }, fetched] = await Promise.all([
     loadPosted(config.postedEventsPath),
     deps.fetchEvents(),
   ]);
   const events = fetched.filter(isPostable);
 
-  if (isFirstRun(state)) {
+  if (isFirstRun) {
     // connpass returns events newest-first; appendAndPrune retains its tail,
     // so store oldest-first to preserve the most recent ids across later prunes.
     const ids = events.map((e) => e.id).toReversed();
@@ -71,13 +65,9 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
       console.log(`Hit batch deadline; deferring ${deferred} events to next run`);
       break;
     }
-    try {
-      // oxlint-disable-next-line no-await-in-loop
-      await deps.client.postEvent(event);
-    } catch (err) {
-      console.error(`Failed to post event ${event.id}:`, err);
-      continue;
-    }
+    // oxlint-disable-next-line no-await-in-loop
+    const result = await deps.client.postEvent(event);
+    if (result === "failed") continue;
     successCount++;
     if (!config.dryRun) {
       currentState = appendAndPrune(currentState, [event.id]);
@@ -102,7 +92,10 @@ export async function main(): Promise<void> {
   const config = loadConfig();
   const client = config.dryRun
     ? createDryRunClient()
-    : createBlueskyClient(await login(config.blueskyHandle, config.blueskyAppPassword));
+    : createBlueskyClient(
+        await login(config.blueskyHandle, config.blueskyAppPassword),
+        config.blueskyHandle,
+      );
 
   await runOnce(config, {
     fetchEvents: () => fetchFukuokaLatestEvents(config.connpassApiKey),

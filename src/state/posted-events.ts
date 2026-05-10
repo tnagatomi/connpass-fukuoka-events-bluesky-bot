@@ -4,13 +4,17 @@ import type { ConnpassEvent } from "../connpass/types.ts";
 
 export type PostedState = { ids: number[] };
 
-export async function loadPosted(path: string): Promise<PostedState> {
+// `isFirstRun` reflects file existence, not `ids.length === 0`: an existing
+// `{ "ids": [] }` must not silently swallow the next batch of real events.
+export type LoadedState = { state: PostedState; isFirstRun: boolean };
+
+export async function loadPosted(path: string): Promise<LoadedState> {
   let raw: string;
   try {
     raw = await readFile(path, "utf-8");
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code === "ENOENT") {
-      return { ids: [] };
+      return { state: { ids: [] }, isFirstRun: true };
     }
     throw err;
   }
@@ -18,7 +22,7 @@ export async function loadPosted(path: string): Promise<PostedState> {
   if (!isPostedState(parsed)) {
     throw new Error(`Invalid posted-events state at ${path}: expected { ids: number[] }`);
   }
-  return parsed;
+  return { state: parsed, isFirstRun: false };
 }
 
 function isPostedState(value: unknown): value is PostedState {
@@ -33,10 +37,6 @@ export async function savePosted(path: string, state: PostedState): Promise<void
   const tmp = `${path}.tmp`;
   await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`);
   await rename(tmp, path);
-}
-
-export function isFirstRun(state: PostedState): boolean {
-  return state.ids.length === 0;
 }
 
 export function pickNew(state: PostedState, events: ConnpassEvent[]): ConnpassEvent[] {

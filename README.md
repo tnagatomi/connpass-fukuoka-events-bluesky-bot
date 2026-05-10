@@ -13,15 +13,18 @@ GitHub Actions (*/5 * * * *)
        │    └─ 最大 5 ページ (count=100 × start=1,101,201,...) まで paginate して直近 500 件を取得
        ├─ posted-events.json と diff して未投稿のイベントを抽出
        ├─ 古い順に投稿 (text + facets + OGP カード)
+       │    ├─ 投稿前に Bluesky の searchPosts で同 URL の自分の投稿を確認しヒットすればスキップ
+       │    ├─ 投稿が ambiguous に失敗した場合も再度 searchPosts で確認し、ヒットすれば成功扱い
        │    └─ 1 件投稿成功するたびに posted-events.json を即時更新
        └─ 最後にまとめて posted-events.json を commit & push
 ```
 
 - 「新着」= ID をはじめて見たもの。更新は無視
-- 初回実行(`posted-events.json` 不存在)は何も投稿せず、現在見えるイベント(最大 500 件)を「投稿済み」として記録する
+- 初回実行(`posted-events.json` ファイルが不存在)は何も投稿せず、現在見えるイベント(最大 500 件)を「投稿済み」として記録する。既存の `{ "ids": [] }` は初回扱いせず通常通り投稿する
 - 中止イベント (`open_status=cancelled`) は除外
 - 1 件の投稿が失敗しても他は続ける。失敗した ID は記録しないので次回 cron で自動リトライ
 - 投稿ごとに state を即時永続化するため、ループ途中でクラッシュしても次回実行で再投稿しない
+- 投稿前と投稿失敗後に Bluesky の `app.bsky.feed.searchPosts` で `author=<bot> + url=<event.url>` を検索し、同 URL を本文に含む自分の投稿が見つかれば「投稿済み」として state に記録する。これにより post 完了前に runner が落ちても次回 cron で重複投稿しない。ただし検索が失敗したまま投稿も失敗した場合は不確実とみなし state に記録しない（「未投稿の永久欠損 > 重複投稿」を優先）
 - すべての投稿が失敗した場合は run を失敗扱いにする(部分失敗時は workflow warning と Step Summary を出して成功扱い)
 - 1 回の run で投稿開始から 4 分経過したら以降の新規投稿はスキップし、次回 cron に持ち越す(workflow 自体は 10 分でタイムアウト)
 - connpass API への fetch は 1 ページごとに 10 秒でタイムアウト (最悪 5 ページで ~50 秒)
@@ -129,7 +132,8 @@ src/
 │   ├── filter.ts          # cancelled の除外など
 │   └── types.ts           # API レスポンス型
 ├── bluesky/
-│   ├── client.ts          # @atproto/api を使った login と postEvent
+│   ├── client.ts          # @atproto/api を使った login と postEvent (idempotency 含む)
+│   ├── lookup.ts          # searchPosts で同 URL の自分の投稿を確認する best-effort ヘルパ
 │   ├── post-builder.ts    # 投稿テキスト + facets の生成
 │   ├── cardyb.ts          # Bluesky 公式 OGP 抽出 API (cardyb) のクライアント
 │   └── ogp.ts             # cardyb 経由で取得した OG メタデータと画像を OGP カードに変換
