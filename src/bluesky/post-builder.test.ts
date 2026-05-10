@@ -120,7 +120,7 @@ describe("buildPost", () => {
   });
 
   test("drops the title when overhead alone exceeds budget and place is unavailable", () => {
-    // A pathologically long URL pushes overhead past MAX_BYTES on its own.
+    // A pathologically long URL pushes overhead past the budget on its own.
     // Without a place line to shrink, the original title used to slip
     // through unchanged; now it must be dropped.
     const longUrl = `https://example.com/${"a".repeat(2900)}`;
@@ -132,7 +132,34 @@ describe("buildPost", () => {
       address: null,
     });
     expect(result.text).not.toContain("Original title");
-    expect(result.text).toContain(longUrl);
+    // The visible URL may have been shortened too (see the next test), but
+    // the facet always preserves the full URL so clicks still resolve.
+    expect(result.facets[0]!.features).toEqual([
+      { $type: "app.bsky.richtext.facet#link", uri: longUrl },
+    ]);
+  });
+
+  test("shrinks the visible URL when the URL alone exceeds the byte budget", () => {
+    // A connpass-side anomaly: even after dropping the title and place the
+    // URL on its own would still breach MAX_BYTES, so the visible URL is
+    // truncated while the facet uri keeps the original.
+    const longUrl = `https://example.com/${"a".repeat(3100)}`;
+    const result = buildPost({
+      ...baseEvent,
+      title: "Original title",
+      url: longUrl,
+      place: null,
+      address: null,
+    });
+
+    const u = new UnicodeString(result.text);
+    expect(u.graphemeLength).toBeLessThanOrEqual(300);
+    expect(u.utf8.byteLength).toBeLessThanOrEqual(3000);
+    expect(result.text).toContain(ELLIPSIS);
+    expect(result.text).not.toContain(longUrl);
+    expect(result.facets[0]!.features).toEqual([
+      { $type: "app.bsky.richtext.facet#link", uri: longUrl },
+    ]);
   });
 
   test("truncates long place to stay within 300 graphemes", () => {

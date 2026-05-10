@@ -31,7 +31,8 @@ function sliceToBudget(str: string, maxGraphemes: number, maxBytes: number): str
 }
 
 export function buildPost(event: ConnpassEvent): BuiltPost {
-  const link = event.url;
+  const linkUri = event.url;
+  let linkText = event.url;
   let title = event.title;
   let place = event.place ?? event.address;
 
@@ -43,7 +44,7 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
     if (place) {
       lines.push(`📍 ${place}`);
     }
-    lines.push("", link);
+    lines.push("", linkText);
     return lines.join("\n");
   };
 
@@ -72,16 +73,39 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
         sliceToBudget(place, Math.max(0, placeGraphemeBudget), Math.max(0, placeByteBudget)) +
         ELLIPSIS;
     } else {
-      // No place line to shrink. Drop the title so we don't leave its full
-      // text in an over-limit post. If the URL itself is the overhead, the
-      // post may still exceed MAX_BYTES — that's a connpass-side anomaly.
+      // No place line to shrink. Drop the title so the URL-shrink step below
+      // gets a clean budget to work with.
       title = "";
     }
     text = compose();
     unicode = new UnicodeString(text);
   }
 
-  const linkStartUtf16 = text.length - link.length;
+  // If the URL itself is so long that the post still breaches the limit,
+  // shrink the visible link text. The facet keeps the full URL as its uri,
+  // so clicks still resolve to the original link.
+  if (unicode.graphemeLength > MAX_GRAPHEMES || unicode.utf8.byteLength > MAX_BYTES) {
+    const linkUni = new UnicodeString(linkText);
+    const overheadGraphemes = unicode.graphemeLength - linkUni.graphemeLength;
+    const overheadBytes = unicode.utf8.byteLength - linkUni.utf8.byteLength;
+    const linkGraphemeBudget = MAX_GRAPHEMES - overheadGraphemes - 1;
+    const linkByteBudget = MAX_BYTES - overheadBytes - ELLIPSIS_BYTES;
+    linkText =
+      sliceToBudget(linkUri, Math.max(0, linkGraphemeBudget), Math.max(0, linkByteBudget)) +
+      ELLIPSIS;
+    text = compose();
+    unicode = new UnicodeString(text);
+  }
+
+  // By this point title/place/linkText shrinkage must have brought the post
+  // under both caps. Reaching this branch means the budget math is wrong.
+  if (unicode.graphemeLength > MAX_GRAPHEMES || unicode.utf8.byteLength > MAX_BYTES) {
+    throw new Error(
+      `buildPost produced over-limit text: ${unicode.graphemeLength} graphemes, ${unicode.utf8.byteLength} bytes`,
+    );
+  }
+
+  const linkStartUtf16 = text.length - linkText.length;
   return {
     text,
     facets: [
@@ -90,7 +114,7 @@ export function buildPost(event: ConnpassEvent): BuiltPost {
           byteStart: unicode.utf16IndexToUtf8Index(linkStartUtf16),
           byteEnd: unicode.utf8.byteLength,
         },
-        features: [{ $type: "app.bsky.richtext.facet#link", uri: link }],
+        features: [{ $type: "app.bsky.richtext.facet#link", uri: linkUri }],
       },
     ],
   };
