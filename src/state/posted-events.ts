@@ -39,9 +39,21 @@ export async function savePosted(path: string, state: PostedState): Promise<void
   await rename(tmp, path);
 }
 
+// Also drops duplicate ids within `events` itself: connpass pagination can
+// overlap if a new event is published mid-fetch (page N+1 starts at the same
+// global offset that page N just shifted past), so the same id can appear on
+// two pages. Without this, both occurrences enter the post loop and the
+// in-loop state save only catches the second iteration after the first has
+// already posted.
 export function pickNew(state: PostedState, events: ConnpassEvent[]): ConnpassEvent[] {
-  const known = new Set(state.ids);
-  return events.filter((e) => !known.has(e.id));
+  const seen = new Set(state.ids);
+  const out: ConnpassEvent[] = [];
+  for (const e of events) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    out.push(e);
+  }
+  return out;
 }
 
 export function appendAndPrune(

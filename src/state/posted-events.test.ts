@@ -109,6 +109,12 @@ describe("pickNew", () => {
     const events = [event(3), event(1), event(2)];
     expect(pickNew({ ids: [1] }, events)).toEqual([event(3), event(2)]);
   });
+
+  test("drops duplicate ids within the same batch, keeping the first occurrence", () => {
+    const first = event(1);
+    const second = { ...event(1), title: "stale copy" };
+    expect(pickNew({ ids: [] }, [first, event(2), second])).toEqual([first, event(2)]);
+  });
 });
 
 describe("appendAndPrune", () => {
