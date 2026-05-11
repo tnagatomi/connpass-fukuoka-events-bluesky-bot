@@ -28,6 +28,7 @@ GitHub Actions (*/5 * * * *)
 - すべての投稿が失敗した場合は run を失敗扱いにする(部分失敗時は workflow warning と Step Summary を出して成功扱い)
 - 1 回の run で投稿開始から 4 分経過したら以降の新規投稿はスキップし、次回 cron に持ち越す(workflow 自体は 10 分でタイムアウト)
 - connpass API への fetch は 1 ページごとに 10 秒でタイムアウト (最悪 5 ページで ~50 秒)
+- Bluesky への XRPC 呼び出し (login / post / uploadBlob 含む) は 1 呼び出しごとに 10 秒でタイムアウト。1 呼び出しが無限ハングして workflow timeout (10 分) で SIGKILL され、state の commit & push が走らないまま投稿だけが残るのを防ぐ
 - 状態ファイル `posted-events.json` は GitHub App の installation token で push（リポジトリの ruleset を bypass する必要あり）。bot 本体が失敗した場合でも state の push は走る
 
 ## セットアップ

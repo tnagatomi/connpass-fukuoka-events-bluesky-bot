@@ -2,9 +2,11 @@ import { Agent, CredentialSession } from "@atproto/api";
 import { findExistingEventPost, type PostSearcher } from "./lookup.ts";
 import { type BlobUploader, buildExternalCard } from "./ogp.ts";
 import { buildPost } from "./post-builder.ts";
+import { withTimeoutFetch } from "./timeout-fetch.ts";
 import type { ConnpassEvent } from "../connpass/types.ts";
 
 const SERVICE_URL = new URL("https://bsky.social");
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export type Poster = BlobUploader & Pick<Agent, "post"> & { app: { bsky: { feed: PostSearcher } } };
 
@@ -62,7 +64,10 @@ export function createDryRunClient(): BlueskyClient {
 }
 
 export async function login(handle: string, appPassword: string): Promise<Agent> {
-  const session = new CredentialSession(SERVICE_URL);
+  const session = new CredentialSession(
+    SERVICE_URL,
+    withTimeoutFetch(globalThis.fetch, REQUEST_TIMEOUT_MS),
+  );
   await session.login({ identifier: handle, password: appPassword });
   return new Agent(session);
 }
