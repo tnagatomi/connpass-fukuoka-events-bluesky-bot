@@ -2,11 +2,13 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { runOnce } from "./main.ts";
+import { MAX_NEW_EVENTS_PER_RUN, runOnce } from "./main.ts";
 import type { Config } from "./config.ts";
 import { MAX_FETCH_EVENTS } from "./connpass/client.ts";
 import type { ConnpassEvent } from "./connpass/types.ts";
 
+// Default start is far-future so tests that use the real clock stay
+// deterministic now that already-started events are filtered out.
 const event = (id: number, overrides: Partial<ConnpassEvent> = {}): ConnpassEvent => ({
   id,
   title: `event ${id}`,
@@ -14,7 +16,7 @@ const event = (id: number, overrides: Partial<ConnpassEvent> = {}): ConnpassEven
   description: null,
   url: `https://connpass.com/event/${id}/`,
   image_url: null,
-  started_at: "2026-05-15T19:00:00+09:00",
+  started_at: "2100-01-01T19:00:00+09:00",
   ended_at: null,
   address: null,
   place: null,
@@ -265,6 +267,48 @@ describe("runOnce", () => {
     expect(postEvent.mock.calls.map((c) => (c[0] as ConnpassEvent).id)).toEqual([1, 2, 3]);
     const saved = JSON.parse(await readFile(statePath, "utf-8"));
     expect(saved.ids).toEqual([99, 1, 2, 3]);
+  });
+
+  test("does not post unseen events that already started", async () => {
+    // Regression for the 2026-05-27 incident: connpass suddenly returned ~500
+    // events for the prefecture query (previously ~150), flooding the id diff
+    // with months-old events the bot had never seen, and it posted 351 of
+    // them. Unknown ids whose start time is already past must not be posted.
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const now = new Date("2026-05-27T06:33:00+09:00").getTime();
+    const past = Array.from({ length: 10 }, (_, i) =>
+      event(1000 + i, { started_at: "2025-11-05T19:00:00+09:00" }),
+    );
+    const fetched = [event(1, { started_at: "2026-06-01T19:00:00+09:00" }), ...past];
+    const postEvent = vi.fn().mockResolvedValue("posted");
+
+    await runOnce(config, {
+      fetchEvents: () => Promise.resolve(fetched),
+      client: { postEvent },
+      now: () => now,
+    });
+
+    expect(postEvent.mock.calls.map((c) => (c[0] as ConnpassEvent).id)).toEqual([1]);
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved.ids).toEqual([99, 1]);
+  });
+
+  test("refuses the whole batch when unseen events exceed the per-run limit", async () => {
+    // Second guard for the same incident class: even if anomalous events pass
+    // the date filter (e.g. state loss, dedup regression), a batch far larger
+    // than organic Fukuoka volume must fail loudly instead of mass-posting.
+    await writeFile(statePath, JSON.stringify({ ids: [99] }));
+    const count = MAX_NEW_EVENTS_PER_RUN + 1;
+    const fetched = Array.from({ length: count }, (_, i) => event(count - i));
+    const postEvent = vi.fn();
+
+    await expect(
+      runOnce(config, { fetchEvents: () => Promise.resolve(fetched), client: { postEvent } }),
+    ).rejects.toThrow(new RegExp(`${count} new events`));
+
+    expect(postEvent).not.toHaveBeenCalled();
+    const saved = JSON.parse(await readFile(statePath, "utf-8"));
+    expect(saved).toEqual({ ids: [99] });
   });
 
   test("dry-run skips state save even after successful posts", async () => {
