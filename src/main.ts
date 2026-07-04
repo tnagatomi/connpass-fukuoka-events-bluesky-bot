@@ -19,6 +19,14 @@ import { appendAndPrune, loadPosted, pickNew, savePosted } from "./state/posted-
 // leaves ~6 minutes of headroom for that tail plus commit/push.
 const BATCH_DEADLINE_MS = 4 * 60 * 1000;
 
+// Circuit breaker for anomalously large batches. Organic volume is ~2-3 new
+// Fukuoka events per day, so even a multi-day scheduler outage stays far
+// below this. A batch above it means the connpass result window expanded
+// (as on 2026-05-27, when ~350 old events suddenly appeared) or state was
+// lost; posting nothing and failing the run is recoverable, mass-posting
+// is not.
+export const MAX_NEW_EVENTS_PER_RUN = 20;
+
 export type RunDeps = {
   fetchEvents: () => Promise<ConnpassEvent[]>;
   client: BlueskyClient;
@@ -32,7 +40,7 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
     loadPosted(config.postedEventsPath),
     deps.fetchEvents(),
   ]);
-  const events = fetched.filter(isPostable);
+  const events = fetched.filter((e) => isPostable(e, new Date(now())));
 
   if (isFirstRun) {
     // connpass returns events newest-first; appendAndPrune retains its tail,
@@ -49,6 +57,14 @@ export async function runOnce(config: Config, deps: RunDeps): Promise<void> {
   if (toPost.length === 0) {
     console.log("No new events");
     return;
+  }
+  if (toPost.length > MAX_NEW_EVENTS_PER_RUN) {
+    throw new Error(
+      `Refusing to post ${toPost.length} new events (limit ${MAX_NEW_EVENTS_PER_RUN}): ` +
+        "a batch this large means the connpass result window expanded or posted-events.json " +
+        "lost state. Inspect the fetched ids and append the backlog to posted-events.json " +
+        "manually to resume.",
+    );
   }
 
   let currentState = state;
